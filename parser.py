@@ -318,6 +318,14 @@ class Parser:
                 self.advance()
                 right = self.parse_expr(prec + 1)
                 left = {"type": "Pipe", "left": left, "right": right, "line": t.line}
+            elif t.type == "OP" and t.value == "..":
+                # 范围：start..end（含端点，如 0..5 = 0,1,2,3,4,5）
+                prec = 0
+                if prec < min_prec:
+                    break
+                self.advance()
+                right = self.parse_expr(prec + 1)
+                left = {"type": "Range", "start": left, "end": right, "line": t.line}
             else:
                 break
         return left

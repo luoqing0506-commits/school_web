@@ -22,7 +22,7 @@
 
 from number import (parse_number, num_add, num_sub, num_mul, num_div,
                     num_mod, num_neg, num_eq, num_lt, num_le, num_gt, num_ge,
-                    num_str, num_is_zero, Num)
+                    num_str, num_is_zero, num_to_float, Num)
 
 from typing import Any, Dict, List, Optional
 
@@ -449,6 +449,14 @@ class Interpreter:
             if not callable(right_val) and not isinstance(right_val, Function):
                 raise WucuoError("管道右侧必须是函数", expr.get("line"))
             return self.call_value(right_val, [left_val], env, expr.get("line"))
+
+        if t == "Range":
+            # 范围：start..end（含端点，数字）
+            start = self.eval_expr(expr["start"], env)
+            end = self.eval_expr(expr["end"], env)
+            s = int(start) if not isinstance(start, Num) else int(num_to_float(start))
+            e = int(end) if not isinstance(end, Num) else int(num_to_float(end))
+            return {i: v for i, v in enumerate(range(s, e + 1))}
 
         if t == "UnaryOp":
             operand = self.eval_expr(expr["operand"], env)

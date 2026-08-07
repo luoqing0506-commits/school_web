@@ -343,6 +343,11 @@ class CCompiler:
                 return tmp
             raise ValueError("C 编译器管道右侧只支持命名函数")
 
+        if t == "Range":
+            raise ValueError(
+                "C 编译模式暂不支持 范围(start..end) 语法。"
+                "请用解释器/字节码模式运行，或改用 循环 手写。")
+
         if t == "UnaryOp":
             operand = self.gen_expr(expr["operand"])
             if expr["op"] == "-":

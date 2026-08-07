@@ -112,7 +112,16 @@ footer { padding: 8px 20px; font-size: 11px; color: #484f58; text-align: center;
 <script>
 // ============ 内嵌的无错语言核心模块（由 build_playground.py 注入） ============
 const WUCUO_MODULES = [
-    { name: 'number', src: `# -*- coding: utf-8 -*-
+    { name: 'number', src: `# 无错语言 WucuoLang
+# 版权 (C) 2026 薄情寡义
+# 本程序是自由软件：你可以根据自由软件基金会发布的 GNU 通用公共许可证
+# （GPL）第 3 版或（按你的选择）任何更新版本重新分发和/或修改它。
+# 分发本程序的目的是希望它有用，但没有任何保证；甚至没有适销性或
+# 特定用途的隐含保证。详见 GNU 通用公共许可证。
+# 你应该已经收到 GNU 通用公共许可证的副本。如果没有，见
+# <https://www.gnu.org/licenses/>。
+
+# -*- coding: utf-8 -*-
 """
 无错语言 数字塔 (number.py)
 ============================
@@ -303,7 +312,16 @@ def num_is_int(v: Num) -> bool:
 def num_to_float(v: Num) -> float:
     return float(to_fraction(v))
 ` },
-    { name: 'lexer', src: `# -*- coding: utf-8 -*-
+    { name: 'lexer', src: `# 无错语言 WucuoLang
+# 版权 (C) 2026 薄情寡义
+# 本程序是自由软件：你可以根据自由软件基金会发布的 GNU 通用公共许可证
+# （GPL）第 3 版或（按你的选择）任何更新版本重新分发和/或修改它。
+# 分发本程序的目的是希望它有用，但没有任何保证；甚至没有适销性或
+# 特定用途的隐含保证。详见 GNU 通用公共许可证。
+# 你应该已经收到 GNU 通用公共许可证的副本。如果没有，见
+# <https://www.gnu.org/licenses/>。
+
+# -*- coding: utf-8 -*-
 """
 无错语言 词法分析器 (lexer.py)
 ==============================
@@ -353,7 +371,7 @@ KEYWORDS = {
 }
 
 # 多字符运算符（优先匹配长的）
-MULTI_OPS = ["->", "==", "!=", "<=", ">="]
+MULTI_OPS = ["->", "==", "!=", "<=", ">=", ".."]
 
 # 单字符运算符
 SINGLE_OPS = set("+-*/%<>=!|")
@@ -554,7 +572,16 @@ class Lexer:
 def tokenize(source: str) -> List[Token]:
     return Lexer(source).tokenize()
 ` },
-    { name: 'parser', src: `# -*- coding: utf-8 -*-
+    { name: 'parser', src: `# 无错语言 WucuoLang
+# 版权 (C) 2026 薄情寡义
+# 本程序是自由软件：你可以根据自由软件基金会发布的 GNU 通用公共许可证
+# （GPL）第 3 版或（按你的选择）任何更新版本重新分发和/或修改它。
+# 分发本程序的目的是希望它有用，但没有任何保证；甚至没有适销性或
+# 特定用途的隐含保证。详见 GNU 通用公共许可证。
+# 你应该已经收到 GNU 通用公共许可证的副本。如果没有，见
+# <https://www.gnu.org/licenses/>。
+
+# -*- coding: utf-8 -*-
 """
 无错语言 语法分析器 (parser.py)
 ================================
@@ -865,6 +892,14 @@ class Parser:
                 self.advance()
                 right = self.parse_expr(prec + 1)
                 left = {"type": "Pipe", "left": left, "right": right, "line": t.line}
+            elif t.type == "OP" and t.value == "..":
+                # 范围：start..end（含端点，如 0..5 = 0,1,2,3,4,5）
+                prec = 0
+                if prec < min_prec:
+                    break
+                self.advance()
+                right = self.parse_expr(prec + 1)
+                left = {"type": "Range", "start": left, "end": right, "line": t.line}
             else:
                 break
         return left
@@ -1061,7 +1096,16 @@ def parse(source: str) -> dict:
     parser = Parser(tokens)
     return parser.parse_program()
 ` },
-    { name: 'checker', src: `# -*- coding: utf-8 -*-
+    { name: 'checker', src: `# 无错语言 WucuoLang
+# 版权 (C) 2026 薄情寡义
+# 本程序是自由软件：你可以根据自由软件基金会发布的 GNU 通用公共许可证
+# （GPL）第 3 版或（按你的选择）任何更新版本重新分发和/或修改它。
+# 分发本程序的目的是希望它有用，但没有任何保证；甚至没有适销性或
+# 特定用途的隐含保证。详见 GNU 通用公共许可证。
+# 你应该已经收到 GNU 通用公共许可证的副本。如果没有，见
+# <https://www.gnu.org/licenses/>。
+
+# -*- coding: utf-8 -*-
 """
 无错语言 类型检查器 (checker.py)
 =================================
@@ -1483,6 +1527,12 @@ class TypeChecker:
             self.check_expr(expr["right"], in_pure)
             return "任意"
 
+        if t == "Range":
+            # 范围：start..end -> 数字表
+            self.check_expr(expr["start"], in_pure)
+            self.check_expr(expr["end"], in_pure)
+            return "table"
+
         if t == "UnaryOp":
             operand_type = self.check_expr(expr["operand"], in_pure)
             if expr["op"] == "-":
@@ -1601,7 +1651,16 @@ def check(ast) -> bool:
     TypeChecker().check(ast)
     return True
 ` },
-    { name: 'interpreter', src: `# -*- coding: utf-8 -*-
+    { name: 'interpreter', src: `# 无错语言 WucuoLang
+# 版权 (C) 2026 薄情寡义
+# 本程序是自由软件：你可以根据自由软件基金会发布的 GNU 通用公共许可证
+# （GPL）第 3 版或（按你的选择）任何更新版本重新分发和/或修改它。
+# 分发本程序的目的是希望它有用，但没有任何保证；甚至没有适销性或
+# 特定用途的隐含保证。详见 GNU 通用公共许可证。
+# 你应该已经收到 GNU 通用公共许可证的副本。如果没有，见
+# <https://www.gnu.org/licenses/>。
+
+# -*- coding: utf-8 -*-
 """
 无错语言 解释器 (interpreter.py)
 =================================
@@ -1616,7 +1675,7 @@ def check(ast) -> bool:
 
 from number import (parse_number, num_add, num_sub, num_mul, num_div,
                     num_mod, num_neg, num_eq, num_lt, num_le, num_gt, num_ge,
-                    num_str, num_is_zero, Num)
+                    num_str, num_is_zero, num_to_float, Num)
 
 from typing import Any, Dict, List, Optional
 
@@ -2044,6 +2103,14 @@ class Interpreter:
                 raise WucuoError("管道右侧必须是函数", expr.get("line"))
             return self.call_value(right_val, [left_val], env, expr.get("line"))
 
+        if t == "Range":
+            # 范围：start..end（含端点，数字）
+            start = self.eval_expr(expr["start"], env)
+            end = self.eval_expr(expr["end"], env)
+            s = int(start) if not isinstance(start, Num) else int(num_to_float(start))
+            e = int(end) if not isinstance(end, Num) else int(num_to_float(end))
+            return {i: v for i, v in enumerate(range(s, e + 1))}
+
         if t == "UnaryOp":
             operand = self.eval_expr(expr["operand"], env)
             if expr["op"] == "-":
@@ -2262,7 +2329,16 @@ class Interpreter:
         else:
             raise WucuoError("只能给表设置下标", line)
 ` },
-    { name: 'wc_run', src: `# -*- coding: utf-8 -*-
+    { name: 'wc_run', src: `# 无错语言 WucuoLang
+# 版权 (C) 2026 薄情寡义
+# 本程序是自由软件：你可以根据自由软件基金会发布的 GNU 通用公共许可证
+# （GPL）第 3 版或（按你的选择）任何更新版本重新分发和/或修改它。
+# 分发本程序的目的是希望它有用，但没有任何保证；甚至没有适销性或
+# 特定用途的隐含保证。详见 GNU 通用公共许可证。
+# 你应该已经收到 GNU 通用公共许可证的副本。如果没有，见
+# <https://www.gnu.org/licenses/>。
+
+# -*- coding: utf-8 -*-
 """
 无错语言 Playground 入口（浏览器 Pyodide 版）
 =============================================

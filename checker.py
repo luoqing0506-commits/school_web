@@ -429,6 +429,12 @@ class TypeChecker:
             self.check_expr(expr["right"], in_pure)
             return "任意"
 
+        if t == "Range":
+            # 范围：start..end -> 数字表
+            self.check_expr(expr["start"], in_pure)
+            self.check_expr(expr["end"], in_pure)
+            return "table"
+
         if t == "UnaryOp":
             operand_type = self.check_expr(expr["operand"], in_pure)
             if expr["op"] == "-":

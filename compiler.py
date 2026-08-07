@@ -389,6 +389,14 @@ class Compiler:
             self.emit(f"{tmp} = {right}({left})")
             return tmp
 
+        if t == "Range":
+            # 范围：start..end（含端点）
+            start = self.gen_expr(expr["start"])
+            end = self.gen_expr(expr["end"])
+            tmp = self.new_tmp("range")
+            self.emit(f"{tmp} = {{i: v for i, v in enumerate(range(int({start}), int({end}) + 1))}}")
+            return tmp
+
         if t == "Self":
             return "_wc_self"
 
