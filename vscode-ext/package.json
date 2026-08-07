@@ -1,0 +1,38 @@
+{
+  "name": "wucuo-lang",
+  "displayName": "无错语言 WucuoLang",
+  "description": "无错语言（WucuoLang）——AI 写不错的中文编程语言。语法高亮 + 代码补全。",
+  "version": "0.4.0",
+  "publisher": "wucuo",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": ["Programming Languages"],
+  "keywords": ["wucuo", "无错语言", "chinese", "ai-language"],
+  "license": "MIT",
+  "activationEvents": [],
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "wucuo",
+        "aliases": ["无错语言", "Wucuo", "WucuoLang"],
+        "extensions": [".wc"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "wucuo",
+        "scopeName": "source.wucuo",
+        "path": "./syntaxes/wucuo.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "wucuo",
+        "path": "./snippets/wucuo.json"
+      }
+    ]
+  }
+}

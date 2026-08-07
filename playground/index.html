@@ -1,0 +1,2591 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>无错语言 WucuoLang · 在线游乐场</title>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+  background: #0d1117; color: #e6edf3; height: 100vh; display: flex; flex-direction: column;
+}
+header {
+  padding: 12px 20px; background: #161b22; border-bottom: 1px solid #30363d;
+  display: flex; align-items: center; gap: 16px; flex-shrink: 0;
+}
+header h1 { font-size: 18px; color: #58a6ff; font-weight: 600; }
+header .tag { font-size: 12px; color: #8b949e; }
+header .spacer { flex: 1; }
+#status { font-size: 12px; padding: 4px 12px; border-radius: 12px; background: #21262d; color: #8b949e; }
+#status.ready { background: #1f6feb33; color: #58a6ff; }
+#status.error { background: #da3633aa; color: #fff; }
+main { flex: 1; display: flex; gap: 12px; padding: 12px 20px; min-height: 0; }
+.panel { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.panel-title { font-size: 13px; color: #8b949e; margin-bottom: 8px; padding-left: 4px; }
+#code {
+  flex: 1; resize: none; background: #0d1117; color: #e6edf3; border: 1px solid #30363d;
+  border-radius: 8px; padding: 14px; font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 14px; line-height: 1.6; outline: none;
+}
+#code:focus { border-color: #58a6ff; }
+#output {
+  flex: 1; background: #0d1117; border: 1px solid #30363d; border-radius: 8px;
+  padding: 14px; font-family: "Cascadia Code", Consolas, monospace; font-size: 14px;
+  line-height: 1.6; white-space: pre-wrap; overflow-y: auto; color: #7ee787;
+}
+.controls { display: flex; gap: 8px; margin-top: 10px; flex-shrink: 0; }
+button {
+  background: #238636; color: #fff; border: none; border-radius: 6px; padding: 8px 20px;
+  font-size: 14px; cursor: pointer; transition: background .15s;
+}
+button:hover { background: #2ea043; }
+button.secondary { background: #21262d; color: #c9d1d9; }
+button.secondary:hover { background: #30363d; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+select {
+  background: #21262d; color: #c9d1d9; border: 1px solid #30363d; border-radius: 6px;
+  padding: 8px 12px; font-size: 13px; outline: none; cursor: pointer;
+}
+.examples { font-size: 12px; color: #8b949e; margin-left: auto; display: flex; align-items: center; gap: 8px; }
+footer { padding: 8px 20px; font-size: 11px; color: #484f58; text-align: center; border-top: 1px solid #21262d; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>无错语言 WucuoLang</h1>
+  <span class="tag">把"怎么写"交给语法，把"写什么"还给人脑</span>
+  <div class="spacer"></div>
+  <span id="status">加载中…</span>
+</header>
+
+<main>
+  <div class="panel">
+    <div class="panel-title">代码 (Code)</div>
+    <textarea id="code" spellcheck="false">// 无错语言 WucuoLang —— 点击"运行"试试！
+// 全中文关键字，AI 写不错，人也看得懂
+
+功能 双倍(x) -> 数字 {
+    返回 x * 2
+}
+
+功能 加一(x) -> 数字 {
+    返回 x + 1
+}
+
+打印("5 | 双倍 | 加一 =", 5 | 双倍 | 加一)
+
+// 精确数字：0.1 + 0.2 == 0.3
+打印("0.1 + 0.2 =", 0.1 + 0.2)
+
+// 循环
+可变 总和 = 0
+可变 i = 1
+循环 i <= 100 {
+    总和 = 总和 + i
+    i = i + 1
+}
+打印("1加到100 =", 总和)
+</textarea>
+    <div class="controls">
+      <button id="runBtn" onclick="runCode()" disabled>▶ 运行</button>
+      <button class="secondary" onclick="loadExample()">示例</button>
+      <select id="exampleSelect" onchange="loadExample()">
+        <option value="hello">你好世界</option>
+        <option value="pipe">管道 + 精确数字</option>
+        <option value="oop">面向对象</option>
+        <option value="error">错误捕获</option>
+        <option value="fib">斐波那契</option>
+      </select>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-title">输出 (Output)</div>
+    <div id="output">等待运行…</div>
+  </div>
+</main>
+
+<footer>WucuoLang v0.4 · 纯浏览器运行（Pyodide）· 无后端 · 代码不上传</footer>
+
+<script>
+// ============ 内嵌的无错语言核心模块（由 build_playground.py 注入） ============
+const WUCUO_MODULES = [
+    { name: 'number', src: `# -*- coding: utf-8 -*-
+"""
+无错语言 数字塔 (number.py)
+============================
+三层数字塔，保证十进制精确，杜绝浮点误差：
+  第1层 int       : 整数快路径，带溢出检测
+  第2层 Dec       : 定点小数，值 = Coef / 10^Scale，十进制精确
+  第3层 Fraction  : 有理数兜底（除不尽/溢出），仍然精确
+
+承诺：
+  - 0.1 + 0.2 == 0.3 为真（不是 0.30000000000000004）
+  - 整数永不回绕、永不丢位（溢出自动提升）
+  - 唯一"近似"在打印无限循环小数：四舍五入到 20 位
+"""
+
+from fractions import Fraction
+from typing import Union
+
+# 定点小数的最大小数位数（快路径）
+MAX_SCALE = 18
+
+
+class Dec:
+    """定点小数：值 = Coef / 10^Scale。Scale >= 0，值一定带小数部分（或为零）"""
+
+    __slots__ = ("coef", "scale")
+
+    def __init__(self, coef: int, scale: int):
+        # 归一化：去掉尾零
+        while scale > 0 and coef % 10 == 0:
+            coef //= 10
+            scale -= 1
+        self.coef = coef
+        self.scale = scale
+
+    def to_fraction(self) -> Fraction:
+        return Fraction(self.coef, 10 ** self.scale)
+
+    def __repr__(self):
+        return f"Dec({self.coef}, {self.scale})"
+
+
+# 数字塔的统一表示：内部一律用 Fraction 计算（精确），
+# 结果按规则降级回 int/Dec 快路径
+Num = Union[int, Dec, Fraction]
+
+
+def parse_number(s: str) -> Num:
+    """解析数字字面量：123 -> int, 3.14 -> Dec, 超大数 -> Fraction"""
+    s = s.strip()
+    if "." in s:
+        # 定点小数
+        int_part, frac_part = s.split(".")
+        sign = -1 if s.startswith("-") else 1
+        frac_part = frac_part.rstrip("0")
+        if not frac_part:
+            # 3.0 -> 3
+            return int(int_part)
+        scale = len(frac_part)
+        coef = int(int_part.replace("-", "") + frac_part) * sign
+        return Dec(coef, scale)
+    # 整数
+    n = int(s)
+    return n  # Python int 本身就是任意精度，永不溢出
+
+
+def to_fraction(v: Num) -> Fraction:
+    """任意塔内数字 -> Fraction（精确）"""
+    if isinstance(v, int):
+        return Fraction(v)
+    if isinstance(v, Dec):
+        return v.to_fraction()
+    if isinstance(v, Fraction):
+        return v
+    raise TypeError(f"不是数字: {type(v)}")
+
+
+def normalize(fr: Fraction) -> Num:
+    """把 Fraction 结果降级回快路径：整数 -> int，有限小数 -> Dec，否则保持 Fraction"""
+    if fr.denominator == 1:
+        return fr.numerator
+    # 看是否有限小数：分母只含 2 和 5 的因子 → 有限十进制小数
+    d = fr.denominator
+    while d % 2 == 0:
+        d //= 2
+    while d % 5 == 0:
+        d //= 5
+    if d == 1:
+        # 有限小数 -> Dec
+        # 计算需要的小数位数
+        scale = 0
+        d2 = fr.denominator
+        while d2 % 2 == 0:
+            d2 //= 2
+            scale += 1
+        while d2 % 5 == 0:
+            d2 //= 5
+            scale += 1
+        # 分子 * 10^scale / 分母
+        num = fr.numerator * (10 ** scale) // fr.denominator
+        return Dec(num, scale)
+    return fr
+
+
+def num_add(a: Num, b: Num) -> Num:
+    return normalize(to_fraction(a) + to_fraction(b))
+
+
+def num_sub(a: Num, b: Num) -> Num:
+    return normalize(to_fraction(a) - to_fraction(b))
+
+
+def num_mul(a: Num, b: Num) -> Num:
+    return normalize(to_fraction(a) * to_fraction(b))
+
+
+def num_div(a: Num, b: Num) -> Num:
+    if to_fraction(b) == 0:
+        raise ZeroDivisionError("除以零")
+    return normalize(to_fraction(a) / to_fraction(b))
+
+
+def num_mod(a: Num, b: Num) -> Num:
+    if to_fraction(b) == 0:
+        raise ZeroDivisionError("模零")
+    fa, fb = to_fraction(a), to_fraction(b)
+    # 取模：a - b * floor(a/b)
+    q = (fa / fb).__floor__()
+    return normalize(fa - fb * q)
+
+
+def num_neg(a: Num) -> Num:
+    return normalize(-to_fraction(a))
+
+
+def num_eq(a: Num, b: Num) -> bool:
+    return to_fraction(a) == to_fraction(b)
+
+
+def num_lt(a: Num, b: Num) -> bool:
+    return to_fraction(a) < to_fraction(b)
+
+
+def num_le(a: Num, b: Num) -> bool:
+    return to_fraction(a) <= to_fraction(b)
+
+
+def num_gt(a: Num, b: Num) -> bool:
+    return to_fraction(a) > to_fraction(b)
+
+
+def num_ge(a: Num, b: Num) -> bool:
+    return to_fraction(a) >= to_fraction(b)
+
+
+def num_str(v: Num) -> str:
+    """数字 -> 文本（打印用）。无限循环小数保留 20 位"""
+    if isinstance(v, int):
+        return str(v)
+    if isinstance(v, Dec):
+        sign = "-" if v.coef < 0 else ""
+        coef = abs(v.coef)
+        if v.scale == 0:
+            return f"{sign}{coef}"
+        s = str(coef)
+        if len(s) <= v.scale:
+            s = "0" * (v.scale - len(s) + 1) + s
+        int_part = s[:-v.scale]
+        frac_part = s[-v.scale:]
+        return f"{sign}{int_part}.{frac_part}"
+    if isinstance(v, Fraction):
+        f = float(v)
+        s = f"{f:.20f}".rstrip("0").rstrip(".")
+        # 处理 -0
+        if s == "-0":
+            s = "0"
+        return s
+    return str(v)
+
+
+def num_is_zero(v: Num) -> bool:
+    return to_fraction(v) == 0
+
+
+def num_is_int(v: Num) -> bool:
+    return isinstance(v, int)
+
+
+def num_to_float(v: Num) -> float:
+    return float(to_fraction(v))
+` },
+    { name: 'lexer', src: `# -*- coding: utf-8 -*-
+"""
+无错语言 词法分析器 (lexer.py)
+==============================
+把中文源码拆成 token 流。
+中文关键字 + 英文标识符混用支持。
+
+Token 类型：
+  KEY       关键字（量/可变/功能/若/循环...）
+  IDENT     标识符（变量名/函数名）
+  NUMBER    数字（整数/小数，走数字塔）
+  STRING    字符串（"..." '...' \`模板\`）
+  OP        运算符（+ - * / % == != < > <= >= =）
+  PUNCT     标点（( ) { } [ ] , . : ->）
+  EOF       结束
+"""
+
+from dataclasses import dataclass
+from typing import List, Optional
+
+# 关键字表（全中文，一个任务一个写法）
+KEYWORDS = {
+    "量": "LET",
+    "可变": "MUT",
+    "功能": "FN",
+    "纯功能": "PURE_FN",
+    "操作": "OP_FN",
+    "自身": "THIS",
+    "若": "IF",
+    "否则若": "ELIF",
+    "否则": "ELSE",
+    "循环": "WHILE",
+    "对": "FOR_EACH",
+    "在": "IN",
+    "返回": "RETURN",
+    "抛错": "THROW",
+    "捕获": "TRY",
+    "导入": "IMPORT",
+    "真": "TRUE",
+    "假": "FALSE",
+    "空": "NIL",
+    "和": "AND",
+    "或": "OR",
+    "非": "NOT",
+    "在": "IN",
+    "打印": "PRINT",
+    "断言": "ASSERT",
+}
+
+# 多字符运算符（优先匹配长的）
+MULTI_OPS = ["->", "==", "!=", "<=", ">="]
+
+# 单字符运算符
+SINGLE_OPS = set("+-*/%<>=!|")
+
+
+@dataclass
+class Token:
+    type: str
+    value: str
+    line: int
+    col: int
+
+    def __repr__(self):
+        return f"{self.type}({self.value})@{self.line}:{self.col}"
+
+
+class LexError(Exception):
+    def __init__(self, msg, line, col):
+        super().__init__(f"词法错误 第{line}行第{col}列: {msg}")
+        self.line = line
+        self.col = col
+
+
+class Lexer:
+    def __init__(self, source: str):
+        self.source = source
+        self.pos = 0
+        self.line = 1
+        self.col = 1
+        self.tokens: List[Token] = []
+
+    def error(self, msg):
+        raise LexError(msg, self.line, self.col)
+
+    def peek(self, offset=0) -> str:
+        idx = self.pos + offset
+        return self.source[idx] if idx < len(self.source) else ""
+
+    def advance(self) -> str:
+        ch = self.source[self.pos]
+        self.pos += 1
+        if ch == "\\n":
+            self.line += 1
+            self.col = 1
+        else:
+            self.col += 1
+        return ch
+
+    def skip_whitespace_and_comments(self):
+        """跳过空白、行注释 // 和块注释 /* */"""
+        while self.pos < len(self.source):
+            ch = self.peek()
+            if ch in " \\t\\r\\n":
+                self.advance()
+            elif ch == "/" and self.peek(1) == "/":
+                # 行注释
+                while self.pos < len(self.source) and self.peek() != "\\n":
+                    self.advance()
+            elif ch == "/" and self.peek(1) == "*":
+                # 块注释
+                self.advance()  # /
+                self.advance()  # *
+                while self.pos < len(self.source):
+                    if self.peek() == "*" and self.peek(1) == "/":
+                        self.advance()
+                        self.advance()
+                        break
+                    self.advance()
+                else:
+                    self.error("块注释未闭合")
+            else:
+                break
+
+    def read_string(self, quote: str) -> str:
+        """读取字符串字面量（支持转义）"""
+        self.advance()  # 开引号
+        result = []
+        while self.pos < len(self.source):
+            ch = self.advance()
+            if ch == quote:
+                return "".join(result)
+            if ch == "\\\\":
+                if self.pos >= len(self.source):
+                    break
+                esc = self.advance()
+                escapes = {"n": "\\n", "t": "\\t", "r": "\\r", "\\\\": "\\\\", '"': '"', "'": "'"}
+                result.append(escapes.get(esc, "\\\\" + esc))
+            else:
+                result.append(ch)
+        self.error(f"字符串未闭合（缺少 {quote}）")
+
+    def read_template(self) -> str:
+        """读取模板字符串 \`...\`（原样保留，支持 \${expr} 插值由 parser 处理）"""
+        self.advance()  # \`
+        result = []
+        while self.pos < len(self.source):
+            ch = self.advance()
+            if ch == "\`":
+                return "".join(result)
+            result.append(ch)
+        self.error("模板字符串未闭合")
+
+    def read_number(self) -> str:
+        """读取数字（整数/小数），返回字面量文本"""
+        start = self.pos
+        if self.peek() in "+-":
+            self.advance()
+        while self.peek().isdigit():
+            self.advance()
+        if self.peek() == "." and self.peek(1).isdigit():
+            self.advance()  # .
+            while self.peek().isdigit():
+                self.advance()
+        return self.source[start:self.pos]
+
+    def read_ident(self) -> str:
+        """读取标识符（中文/英文/数字/下划线，不能数字开头）"""
+        start = self.pos
+        while self.pos < len(self.source):
+            ch = self.peek()
+            if ch.isalnum() or ch in "_":
+                self.advance()
+            else:
+                break
+        return self.source[start:self.pos]
+
+    def tokenize(self) -> List[Token]:
+        while self.pos < len(self.source):
+            self.skip_whitespace_and_comments()
+            if self.pos >= len(self.source):
+                break
+
+            line, col = self.line, self.col
+            ch = self.peek()
+
+            # 字符串
+            if ch in "\\"'":
+                val = self.read_string(ch)
+                self.tokens.append(Token("STRING", val, line, col))
+                continue
+
+            # 模板字符串
+            if ch == "\`":
+                val = self.read_template()
+                self.tokens.append(Token("TEMPLATE", val, line, col))
+                continue
+
+            # 数字（含正负号——负号单独处理避免歧义，这里只吃数字开头）
+            if ch.isdigit():
+                val = self.read_number()
+                self.tokens.append(Token("NUMBER", val, line, col))
+                continue
+
+            # 标识符 / 关键字（中文或字母开头）
+            if ch.isalpha() or ch == "_":
+                val = self.read_ident()
+                tok_type = KEYWORDS.get(val, "IDENT")
+                self.tokens.append(Token(tok_type, val, line, col))
+                continue
+
+            # 元编程 @：@运算符名 或 @add（访问运算符实现/覆盖）
+            if ch == "@":
+                self.advance()
+                val = self.read_ident()
+                self.tokens.append(Token("META", "@" + val, line, col))
+                continue
+
+            # 多字符运算符
+            matched_multi = None
+            for op in MULTI_OPS:
+                if self.source.startswith(op, self.pos):
+                    matched_multi = op
+                    break
+            if matched_multi:
+                for _ in matched_multi:
+                    self.advance()
+                self.tokens.append(Token("OP", matched_multi, line, col))
+                continue
+
+            # 单字符运算符
+            if ch in SINGLE_OPS:
+                self.advance()
+                self.tokens.append(Token("OP", ch, line, col))
+                continue
+
+            # 标点
+            if ch in "(){}[],.:":
+                self.advance()
+                self.tokens.append(Token("PUNCT", ch, line, col))
+                continue
+
+            self.error(f"无法识别的字符 '{ch}'")
+
+        self.tokens.append(Token("EOF", "", self.line, self.col))
+        return self.tokens
+
+
+def tokenize(source: str) -> List[Token]:
+    return Lexer(source).tokenize()
+` },
+    { name: 'parser', src: `# -*- coding: utf-8 -*-
+"""
+无错语言 语法分析器 (parser.py)
+================================
+递归下降解析：token 流 -> AST。
+
+AST 节点用 dict 表示，type 字段区分节点类型：
+  Program / Let / Mut / FnDef / PureFnDef / If / While / ForEach
+  Return / Throw / Try / ExprStmt / Block / Call / BinOp / UnaryOp
+  Assign / Table / Index / GetAttr / SetAttr / Literal / Var / Print / Assert
+"""
+
+from dataclasses import dataclass
+from typing import List, Optional
+
+from lexer import Token, tokenize
+
+# 类型关键字 -> 内部类型名
+TYPE_NAMES = {"数字": "number", "文本": "string", "布尔": "bool", "空": "nil", "表": "table", "功能": "function"}
+
+# 二元运算符优先级（越大越优先）
+BINOP_PRECEDENCE = {
+    "或": 1,
+    "和": 2,
+    "==": 3, "!=": 3,
+    "<": 4, "<=": 4, ">": 4, ">=": 4,
+    "+": 5, "-": 5,
+    "*": 6, "/": 6, "%": 6,
+}
+
+
+class ParseError(Exception):
+    def __init__(self, msg, token=None):
+        loc = f"第{token.line}行第{token.col}列" if token else "未知位置"
+        super().__init__(f"语法错误 {loc}: {msg}")
+        self.token = token
+
+
+class Parser:
+    def __init__(self, tokens: List[Token]):
+        self.tokens = tokens
+        self.pos = 0
+
+    def peek(self, offset=0) -> Token:
+        idx = min(self.pos + offset, len(self.tokens) - 1)
+        return self.tokens[idx]
+
+    def advance(self) -> Token:
+        t = self.tokens[self.pos]
+        if t.type != "EOF":
+            self.pos += 1
+        return t
+
+    def expect(self, type_: str, value: Optional[str] = None) -> Token:
+        t = self.peek()
+        if t.type != type_ or (value is not None and t.value != value):
+            want = f"{type_}({value})" if value else type_
+            raise ParseError(f"期望 {want}，实际得到 {t.type}({t.value})", t)
+        return self.advance()
+
+    def expect_op(self, value: str) -> Token:
+        return self.expect("OP", value)
+
+    def expect_punct(self, value: str) -> Token:
+        return self.expect("PUNCT", value)
+
+    # ------------------------------------------------------------------
+    # 程序入口
+    # ------------------------------------------------------------------
+    def parse_program(self) -> dict:
+        stmts = []
+        while self.peek().type != "EOF":
+            stmts.append(self.parse_stmt())
+        return {"type": "Program", "body": stmts}
+
+    # ------------------------------------------------------------------
+    # 语句
+    # ------------------------------------------------------------------
+    def parse_stmt(self) -> dict:
+        t = self.peek()
+        if t.type == "LET":
+            return self.parse_let(False)
+        if t.type == "MUT":
+            return self.parse_let(True)
+        if t.type in ("FN", "PURE_FN", "OP_FN"):
+            return self.parse_fn_def(t.type)
+        if t.type == "IF":
+            return self.parse_if()
+        if t.type == "WHILE":
+            return self.parse_while()
+        if t.type == "FOR_EACH":
+            return self.parse_for_each()
+        if t.type == "RETURN":
+            self.advance()
+            expr = self.parse_expr() if self.peek().type != "PUNCT" or self.peek().value != "}" else None
+            return {"type": "Return", "value": expr, "line": t.line}
+        if t.type == "THROW":
+            self.advance()
+            expr = self.parse_expr()
+            return {"type": "Throw", "value": expr, "line": t.line}
+        if t.type == "TRY":
+            return self.parse_try()
+        if t.type == "IMPORT":
+            self.advance()
+            path = self.expect("STRING")
+            return {"type": "Import", "path": path.value, "line": t.line}
+        if t.type == "PRINT":
+            self.advance()
+            args = []
+            # 打印(...) 带括号形式
+            if self.peek().type == "PUNCT" and self.peek().value == "(":
+                self.advance()
+                while not (self.peek().type == "PUNCT" and self.peek().value == ")"):
+                    args.append(self.parse_expr())
+                    if self.peek().type == "PUNCT" and self.peek().value == ",":
+                        self.advance()
+                    else:
+                        break
+                self.expect_punct(")")
+            else:
+                # 打印 表达式（不带括号，简单形式）
+                if self.peek().type != "PUNCT" or self.peek().value != "}":
+                    args.append(self.parse_expr())
+                    while self.peek().type == "PUNCT" and self.peek().value == ",":
+                        self.advance()
+                        args.append(self.parse_expr())
+            return {"type": "Print", "args": args, "line": t.line}
+        if t.type == "ASSERT":
+            self.advance()
+            cond = self.parse_expr()
+            msg = None
+            if self.peek().type == "PUNCT" and self.peek().value == ",":
+                self.advance()
+                msg = self.parse_expr()
+            return {"type": "Assert", "cond": cond, "msg": msg, "line": t.line}
+        if t.type == "PUNCT" and t.value == "{":
+            # 裸块
+            return self.parse_block()
+        # 表达式语句（含赋值）
+        return self.parse_expr_stmt()
+
+    def parse_let(self, mutable: bool) -> dict:
+        kw = self.advance()  # 量 / 可变
+        name = self.expect("IDENT")
+        # 多变量声明：量 a, b = 表达式（解构赋值）
+        names = [name.value]
+        if self.peek().type == "PUNCT" and self.peek().value == ",":
+            while self.peek().type == "PUNCT" and self.peek().value == ",":
+                self.advance()
+                n2 = self.expect("IDENT")
+                names.append(n2.value)
+        # 可选类型标注
+        type_ann = None
+        if self.peek().type == "PUNCT" and self.peek().value == ":":
+            self.advance()
+            type_tok = self.expect("IDENT")
+            type_ann = TYPE_NAMES.get(type_tok.value, type_tok.value)
+        self.expect_op("=")
+        value = self.parse_expr()
+        return {"type": "Mut" if mutable else "Let",
+                "name": name.value, "names": names, "type_ann": type_ann,
+                "value": value, "line": kw.line}
+
+    def parse_params(self):
+        """解析参数列表：名字 / 名字: 类型 / 名字 = 默认值 / 名字: 类型 = 默认值"""
+        params = []
+        while not (self.peek().type == "PUNCT" and self.peek().value == ")"):
+            pname = self.expect("IDENT")
+            ptype = None
+            if self.peek().type == "PUNCT" and self.peek().value == ":":
+                self.advance()
+                tt = self.expect("IDENT")
+                ptype = TYPE_NAMES.get(tt.value, tt.value)
+            default = None
+            if self.peek().type == "OP" and self.peek().value == "=":
+                self.advance()
+                default = self.parse_expr()
+            params.append({"name": pname.value, "type": ptype, "default": default})
+            if self.peek().type == "PUNCT" and self.peek().value == ",":
+                self.advance()
+            elif self.peek().type == "PUNCT" and self.peek().value == ")":
+                break
+            else:
+                raise ParseError("参数之间需要逗号", self.peek())
+        return params
+
+    def parse_fn_def(self, kind: str) -> dict:
+        kw = self.advance()  # 功能 / 纯功能 / 操作
+        name_tok = self.expect("IDENT")
+        self.expect_punct("(")
+        params = self.parse_params()
+        self.expect_punct(")")
+        # 返回类型（可选）
+        ret_type = None
+        if self.peek().type == "OP" and self.peek().value == "->":
+            self.advance()
+            tt = self.expect("IDENT")
+            ret_type = TYPE_NAMES.get(tt.value, tt.value)
+        body = self.parse_block()
+        # kind: FN=普通, PURE_FN=纯功能, OP_FN=操作（副作用）
+        if kind == "PURE_FN":
+            node_type = "PureFnDef"
+        elif kind == "OP_FN":
+            node_type = "OpFnDef"
+        else:
+            node_type = "FnDef"
+        return {"type": node_type,
+                "name": name_tok.value, "params": params,
+                "ret_type": ret_type, "body": body, "line": kw.line}
+
+    def parse_if(self) -> dict:
+        kw = self.advance()  # 若
+        cond = self.parse_expr()
+        then_block = self.parse_block()
+        elifs = []
+        else_block = None
+        while self.peek().type == "ELIF":
+            self.advance()
+            c = self.parse_expr()
+            b = self.parse_block()
+            elifs.append({"cond": c, "body": b})
+        if self.peek().type == "ELSE":
+            self.advance()
+            else_block = self.parse_block()
+        return {"type": "If", "cond": cond, "then": then_block,
+                "elifs": elifs, "else": else_block, "line": kw.line}
+
+    def parse_while(self) -> dict:
+        kw = self.advance()  # 循环
+        cond = self.parse_expr()
+        body = self.parse_block()
+        return {"type": "While", "cond": cond, "body": body, "line": kw.line}
+
+    def parse_for_each(self) -> dict:
+        kw = self.advance()  # 对
+        var = self.expect("IDENT")
+        # 键值对遍历：对 键, 值 在 表
+        var2 = None
+        if self.peek().type == "PUNCT" and self.peek().value == ",":
+            self.advance()
+            var2 = self.expect("IDENT").value
+        self.expect("IN", "在")  # 在
+        iterable = self.parse_expr()
+        body = self.parse_block()
+        return {"type": "ForEach", "var": var.value, "var2": var2,
+                "iterable": iterable, "body": body, "line": kw.line}
+
+    def parse_try(self) -> dict:
+        kw = self.advance()  # 捕获
+        # 语法：捕获(可能失败的表达式) 或 捕获 { 语句块 }
+        if self.peek().type == "PUNCT" and self.peek().value == "(":
+            self.advance()
+            expr = self.parse_expr()
+            self.expect_punct(")")
+            return {"type": "TryExpr", "expr": expr, "line": kw.line}
+        # 块形式：捕获 { ... }（把块包成匿名函数）
+        block = self.parse_block()
+        return {"type": "TryBlock", "body": block, "line": kw.line}
+
+    def parse_block(self) -> dict:
+        open_tok = self.peek()
+        self.expect_punct("{")
+        stmts = []
+        while not (self.peek().type == "PUNCT" and self.peek().value == "}"):
+            if self.peek().type == "EOF":
+                raise ParseError("块未闭合，缺少 }", self.peek())
+            stmts.append(self.parse_stmt())
+        close_tok = self.expect_punct("}")
+        return {"type": "Block", "body": stmts,
+                "end_line": close_tok.line}
+
+    def parse_expr_stmt(self) -> dict:
+        expr = self.parse_expr()
+        # 赋值：expr = expr（只能对变量/属性/下标赋值）
+        if self.peek().type == "OP" and self.peek().value == "=":
+            self.advance()
+            value = self.parse_expr()
+            return {"type": "Assign", "target": expr, "value": value}
+        return {"type": "ExprStmt", "expr": expr}
+
+    # ------------------------------------------------------------------
+    # 表达式（Pratt 解析，处理优先级）
+    # ------------------------------------------------------------------
+    def parse_expr(self, min_prec: int = 0) -> dict:
+        left = self.parse_unary()
+        while True:
+            t = self.peek()
+            if t.type == "OP" and t.value in BINOP_PRECEDENCE:
+                prec = BINOP_PRECEDENCE[t.value]
+                if prec < min_prec:
+                    break
+                self.advance()
+                right = self.parse_expr(prec + 1)
+                left = {"type": "BinOp", "op": t.value, "left": left, "right": right, "line": t.line}
+            elif t.type in ("AND", "OR"):
+                # 和 / 或（短路逻辑）
+                prec = 1 if t.type == "OR" else 2
+                if prec < min_prec:
+                    break
+                self.advance()
+                right = self.parse_expr(prec + 1)
+                left = {"type": "LogicOp", "op": "或" if t.type == "OR" else "和",
+                        "left": left, "right": right, "line": t.line}
+            elif t.type == "OP" and t.value == "|":
+                # 管道：左边值传给右边函数
+                prec = 0
+                if prec < min_prec:
+                    break
+                self.advance()
+                right = self.parse_expr(prec + 1)
+                left = {"type": "Pipe", "left": left, "right": right, "line": t.line}
+            else:
+                break
+        return left
+
+    def parse_unary(self) -> dict:
+        t = self.peek()
+        if t.type == "OP" and t.value == "-":
+            self.advance()
+            operand = self.parse_unary()
+            return {"type": "UnaryOp", "op": "-", "operand": operand, "line": t.line}
+        if t.type == "NOT":
+            self.advance()
+            operand = self.parse_unary()
+            return {"type": "UnaryOp", "op": "非", "operand": operand, "line": t.line}
+        return self.parse_postfix()
+
+    def parse_postfix(self) -> dict:
+        expr = self.parse_primary()
+        while True:
+            t = self.peek()
+            if t.type == "PUNCT" and t.value == "(":
+                # 函数调用（支持关键字参数：名字 = 值，FFI 用）
+                self.advance()
+                args = []
+                kwargs = {}
+                while not (self.peek().type == "PUNCT" and self.peek().value == ")"):
+                    # 关键字参数检测：IDENT = 值
+                    if self.peek().type == "IDENT" and self.peek(1).type == "OP" and self.peek(1).value == "=":
+                        kw_name = self.advance().value
+                        self.advance()  # =
+                        kw_val = self.parse_expr()
+                        kwargs[kw_name] = kw_val
+                    else:
+                        args.append(self.parse_expr())
+                    if self.peek().type == "PUNCT" and self.peek().value == ",":
+                        self.advance()
+                self.expect_punct(")")
+                expr = {"type": "Call", "callee": expr, "args": args,
+                        "kwargs": kwargs, "line": t.line}
+            elif t.type == "PUNCT" and t.value == ".":
+                # 属性访问
+                self.advance()
+                name = self.expect("IDENT")
+                expr = {"type": "GetAttr", "obj": expr, "name": name.value, "line": t.line}
+            elif t.type == "PUNCT" and t.value == "[":
+                # 下标访问 或 切片 [开始:结束]
+                self.advance()
+                # 切片检测：先看是不是 [x:y] 形式
+                if self.peek().type == "PUNCT" and self.peek().value == ":":
+                    # [0:80] 省略开始
+                    self.advance()
+                    end = self.parse_expr() if not (self.peek().type == "PUNCT" and self.peek().value == "]") else None
+                    self.expect_punct("]")
+                    expr = {"type": "Slice", "obj": expr, "start": None, "end": end, "line": t.line}
+                else:
+                    # 可能是 [开始:结束] 或 [下标]
+                    save = self.pos
+                    try:
+                        first = self.parse_expr()
+                    except ParseError:
+                        raise
+                    if self.peek().type == "PUNCT" and self.peek().value == ":":
+                        self.advance()
+                        end = self.parse_expr() if not (self.peek().type == "PUNCT" and self.peek().value == "]") else None
+                        self.expect_punct("]")
+                        expr = {"type": "Slice", "obj": expr, "start": first, "end": end, "line": t.line}
+                    else:
+                        self.expect_punct("]")
+                        expr = {"type": "Index", "obj": expr, "index": first, "line": t.line}
+            else:
+                break
+        return expr
+
+    def parse_primary(self) -> dict:
+        t = self.peek()
+
+        # 字面量
+        if t.type == "NUMBER":
+            self.advance()
+            return {"type": "Literal", "value": t.value, "kind": "number", "line": t.line}
+        if t.type == "STRING":
+            self.advance()
+            return {"type": "Literal", "value": t.value, "kind": "string", "line": t.line}
+        if t.type == "TEMPLATE":
+            self.advance()
+            return {"type": "Template", "value": t.value, "line": t.line}
+        if t.type == "TRUE":
+            self.advance()
+            return {"type": "Literal", "value": True, "kind": "bool", "line": t.line}
+        if t.type == "FALSE":
+            self.advance()
+            return {"type": "Literal", "value": False, "kind": "bool", "line": t.line}
+        if t.type == "NIL":
+            self.advance()
+            return {"type": "Literal", "value": None, "kind": "nil", "line": t.line}
+
+        # 匿名函数：功能(x) { ... }
+        if t.type in ("FN", "PURE_FN", "OP_FN"):
+            kind = t.type
+            self.advance()
+            self.expect_punct("(")
+            params = self.parse_params()
+            self.expect_punct(")")
+            ret_type = None
+            if self.peek().type == "OP" and self.peek().value == "->":
+                self.advance()
+                tt = self.expect("IDENT")
+                ret_type = TYPE_NAMES.get(tt.value, tt.value)
+            body = self.parse_block()
+            if kind == "PURE_FN":
+                lit_type = "PureFnLiteral"
+            elif kind == "OP_FN":
+                lit_type = "OpFnLiteral"
+            else:
+                lit_type = "FnLiteral"
+            return {"type": lit_type,
+                    "params": params, "ret_type": ret_type, "body": body, "line": t.line}
+
+        # 表字面量
+        if t.type == "PUNCT" and t.value == "{":
+            return self.parse_table()
+
+        # 括号表达式
+        if t.type == "PUNCT" and t.value == "(":
+            self.advance()
+            expr = self.parse_expr()
+            self.expect_punct(")")
+            return expr
+
+        # 自身（this）—— 指向调用方法的表
+        if t.type == "THIS":
+            self.advance()
+            return {"type": "Self", "line": t.line}
+
+        # 捕获(表达式) —— 错误捕获，返回结果表
+        if t.type == "TRY":
+            self.advance()
+            self.expect_punct("(")
+            expr = self.parse_expr()
+            self.expect_punct(")")
+            return {"type": "TryExpr", "expr": expr, "line": t.line}
+
+        # 导入("路径") —— 模块导入，返回导出表
+        if t.type == "IMPORT":
+            self.advance()
+            self.expect_punct("(")
+            path = self.expect("STRING")
+            self.expect_punct(")")
+            return {"type": "ImportExpr", "path": path.value, "line": t.line}
+
+        # 元编程 @运算符：访问运算符实现（@add / @+ 等）
+        if t.type == "META":
+            self.advance()
+            return {"type": "Meta", "name": t.value, "line": t.line}
+
+        # 变量
+        if t.type == "IDENT":
+            self.advance()
+            return {"type": "Var", "name": t.value, "line": t.line}
+
+        raise ParseError(f"意外的 token: {t.type}({t.value})", t)
+
+    def parse_table(self) -> dict:
+        t = self.advance()  # {
+        entries = []  # 有序列表: {"kind": "item"/"pair", "key":..., "value":...}
+        while not (self.peek().type == "PUNCT" and self.peek().value == "}"):
+            # 键值对：键: 值  或  数组元素：表达式
+            first = self.parse_expr()
+            if self.peek().type == "PUNCT" and self.peek().value == ":":
+                self.advance()
+                value = self.parse_expr()
+                # 键必须是标识符/字符串/数字
+                if first["type"] == "Var":
+                    entries.append({"kind": "pair", "key": first["name"], "value": value})
+                elif first["type"] == "Literal":
+                    entries.append({"kind": "pair", "key": str(first["value"]), "value": value})
+                else:
+                    raise ParseError("表的键必须是标识符或字面量", t)
+            else:
+                entries.append({"kind": "item", "value": first})
+            if self.peek().type == "PUNCT" and self.peek().value == ",":
+                self.advance()
+            elif self.peek().type == "PUNCT" and self.peek().value == "}":
+                break
+            else:
+                raise ParseError("表元素之间需要逗号", self.peek())
+        self.expect_punct("}")
+        return {"type": "Table", "entries": entries, "line": t.line}
+
+
+def parse(source: str) -> dict:
+    """源码 -> AST"""
+    tokens = tokenize(source)
+    parser = Parser(tokens)
+    return parser.parse_program()
+` },
+    { name: 'checker', src: `# -*- coding: utf-8 -*-
+"""
+无错语言 类型检查器 (checker.py)
+=================================
+防错核心：编译期检查，让错误在运行前就暴露。
+
+检查规则：
+  1. 变量必须先声明后使用
+  2. 不可变变量不能赋值（量 a = 5; a = 6 -> 报错）
+  3. 无隐式转换：数字 + 文本 -> 报错（必须显式 转数字/转文本）
+  4. 强类型：声明了类型标注的变量，赋值类型不符 -> 报错
+  5. 纯功能强制：纯功能里禁止 打印/抛错/改外部变量/调非纯函数
+  6. 函数调用参数数量匹配
+  7. 返回类型匹配（有标注时）
+  8. 未定义函数调用 -> 报错
+"""
+
+
+class CheckError(Exception):
+    def __init__(self, msg, line=None):
+        loc = f"第{line}行" if line else "未知位置"
+        super().__init__(f"类型检查错误 {loc}: {msg}")
+        self.line = line
+
+
+# 内置函数 -> (参数类型列表, 返回类型)。None = 任意类型
+BUILTINS = {
+    "打印": (None, None),
+    "长度": ("string", "number"),  # 长度(文本)->数字；长度(表)->数字 实际动态
+    "类型": (None, "string"),
+    "转数字": (None, "number"),
+    "转文本": (None, "string"),
+    "转布尔": (None, "bool"),
+    "键": ("table", "table"),
+    "含": ("table", "bool"),
+    "删": ("table", "table"),
+    "克隆": ("table", "table"),
+    "合并": (None, "table"),
+    "断言": ("bool", "nil"),
+    "读入": (None, "string"),
+    "捕获": (None, "table"),
+    # 文件操作（加强版）
+    "读文件": ("string", "string"),
+    "写文件": (None, "bool"),
+    "追加文件": (None, "bool"),
+    "存在": ("string", "bool"),
+    # JSON
+    "JSON编码": (None, "string"),
+    "JSON解码": ("string", "任意"),
+    # 字符串
+    "分割": (None, "table"),
+    "替换": (None, "string"),
+    "大写": ("string", "string"),
+    "小写": ("string", "string"),
+    "去空格": ("string", "string"),
+    "包含": (None, "bool"),
+    # 列表
+    "排序": ("table", "table"),
+    "反转": ("table", "table"),
+    "追加": (None, "table"),
+    "弹出": ("table", "任意"),
+    # 网络
+    "HTTP获取": ("string", "table"),
+    "HTTP发布": (None, "table"),
+    "下载文件": (None, "bool"),
+    # 时间
+    "现在": (None, "number"),
+    "时间文本": (None, "string"),
+    "睡眠": ("number", "nil"),
+    # 随机
+    "随机数": (None, "number"),
+    "随机整数": (None, "number"),
+    "随机选择": ("table", "任意"),
+    # 数学
+    "绝对值": ("number", "number"),
+    "向下取整": ("number", "number"),
+    "向上取整": ("number", "number"),
+    "平方根": ("number", "number"),
+    "最大值": (None, "number"),
+    "最小值": (None, "number"),
+    "取模": (None, "number"),
+    # 协程
+    "协程": (None, "任意"),
+    "恢复": (None, "任意"),
+    "让出": (None, "任意"),
+    "协程状态": (None, "string"),
+    # HTTP 服务器
+    "服务": (None, "table"),
+    "停止服务": ("table", "任意"),
+    # 日期/正则
+    "日期": (None, "string"),
+    "年月日": ("string", "table"),
+    "匹配": (None, "table"),
+    "查找全部": (None, "table"),
+    "替换正则": (None, "string"),
+    # FFI
+    "导入Python": ("string", "任意"),
+}
+
+
+class TypeChecker:
+    def __init__(self):
+        self.functions = {}   # 函数名 -> {"params": [...], "ret": ..., "pure": bool}
+        self.vars = {}        # 变量名 -> {"type": ..., "mutable": bool}
+        self.scope_stack = []  # 作用域栈（每层是 vars 的 dict）
+        self.warnings = []     # 软警告（不阻止运行）
+        self.in_try_depth = 0  # 捕获块嵌套深度（操作函数强制兜底用）
+
+    def push_scope(self):
+        self.scope_stack.append({})
+
+    def pop_scope(self):
+        self.scope_stack.pop()
+
+    def declare_var(self, name, type_, mutable):
+        """当前作用域声明变量"""
+        scope = self.scope_stack[-1]
+        scope[name] = {"type": type_, "mutable": mutable}
+
+    def lookup_var(self, name):
+        """从内到外找变量定义"""
+        for scope in reversed(self.scope_stack):
+            if name in scope:
+                return scope[name]
+        return None
+
+    def type_name(self, type_):
+        """类型 -> 名字"""
+        if type_ is None:
+            return "任意"
+        return type_
+
+    # ------------------------------------------------------------------
+    # 程序入口
+    # ------------------------------------------------------------------
+    def check(self, ast):
+        # 第一遍：收集所有函数定义（允许前向引用/递归）
+        for stmt in ast["body"]:
+            if stmt["type"] in ("FnDef", "PureFnDef", "OpFnDef"):
+                self.functions[stmt["name"]] = {
+                    "params": stmt["params"],
+                    "ret": stmt.get("ret_type"),
+                    "pure": stmt["type"] == "PureFnDef",
+                    "op": stmt["type"] == "OpFnDef",
+                }
+                # 函数行数软警告（超 30 行提示拆解，不阻止）
+                start_line = stmt.get("line", 0)
+                end_line = stmt["body"].get("end_line", start_line)
+                if end_line - start_line > 30:
+                    self.warnings.append(
+                        f"⚠️ 第{start_line}行 函数 '{stmt['name']}' 有 "
+                        f"{end_line - start_line} 行，超过 30 行，考虑拆解")
+        # 全局作用域（函数名也声明进全局，允许作为值引用）
+        self.push_scope()
+        for name in self.functions:
+            self.declare_var(name, "function", False)
+        for stmt in ast["body"]:
+            self.check_stmt(stmt)
+        self.pop_scope()
+        return True
+
+    # ------------------------------------------------------------------
+    # 语句
+    # ------------------------------------------------------------------
+    def check_stmt(self, stmt, in_pure=False, in_op=False, in_try=False):
+        t = stmt["type"]
+        line = stmt.get("line")
+
+        if t in ("Let", "Mut"):
+            mutable = (t == "Mut")
+            name = stmt["name"]
+            names = stmt.get("names") or [name]
+            for nm in names:
+                if self.lookup_var(nm):
+                    raise CheckError(f"变量 '{nm}' 重复声明", line)
+            value_type = self.check_expr(stmt["value"], in_pure, in_op)
+            # 类型标注检查
+            if stmt.get("type_ann"):
+                ann = stmt["type_ann"]
+                if value_type is not None and ann not in (value_type, "任意"):
+                    raise CheckError(
+                        f"变量 '{name}' 声明为 {self.type_name(ann)}，"
+                        f"但赋了 {self.type_name(value_type)} 类型的值", line)
+                declared = ann
+            else:
+                declared = value_type
+            for nm in names:
+                self.declare_var(nm, declared, mutable)
+            return declared
+
+        if t == "Assign":
+            # 赋值检查：目标必须是变量/属性/下标
+            target = stmt["target"]
+            if target["type"] == "Var":
+                var = self.lookup_var(target["name"])
+                if not var:
+                    raise CheckError(f"变量 '{target['name']}' 未声明", line)
+                if not var["mutable"]:
+                    raise CheckError(
+                        f"变量 '{target['name']}' 是不可变的（用 量 声明）。"
+                        f"要修改请用 可变 声明", line)
+                value_type = self.check_expr(stmt["value"], in_pure, in_op)
+                # 可变变量：新值"任意"/未知时放行（运行时验证）
+                if var["type"] is not None and value_type is not None \\
+                        and var["type"] not in (value_type, "任意") \\
+                        and value_type not in ("任意", None):
+                    raise CheckError(
+                        f"变量 '{target['name']}' 类型是 {self.type_name(var['type'])}，"
+                        f"不能赋 {self.type_name(value_type)} 值", line)
+            elif target["type"] in ("GetAttr", "Index"):
+                self.check_expr(target, in_pure, in_op)
+                self.check_expr(stmt["value"], in_pure, in_op)
+            else:
+                raise CheckError("赋值目标无效", line)
+            return None
+
+        if t == "FnDef":
+            # 函数定义：进入新作用域检查函数体
+            self.push_scope()
+            for p in stmt["params"]:
+                self.declare_var(p["name"], p.get("type"), True)
+            for s in stmt["body"]["body"]:
+                self.check_stmt(s, in_pure=False)
+            self.pop_scope()
+            return None
+
+        if t == "OpFnDef":
+            # 操作函数：允许副作用，内部可自由调用一切
+            self.push_scope()
+            for p in stmt["params"]:
+                self.declare_var(p["name"], p.get("type"), True)
+            for s in stmt["body"]["body"]:
+                self.check_stmt(s, in_pure=False, in_op=True)
+            self.pop_scope()
+            return None
+
+        if t == "PureFnDef":
+            # 纯函数：禁止副作用！
+            self.push_scope()
+            for p in stmt["params"]:
+                self.declare_var(p["name"], p.get("type"), True)
+            for s in stmt["body"]["body"]:
+                self.check_stmt(s, in_pure=True)
+            self.pop_scope()
+            return None
+
+        if t == "If":
+            self.check_expr(stmt["cond"], in_pure, in_op)
+            self.push_scope()
+            for s in stmt["then"]["body"]:
+                self.check_stmt(s, in_pure)
+            self.pop_scope()
+            for elif_branch in stmt.get("elifs", []):
+                self.check_expr(elif_branch["cond"], in_pure, in_op)
+                self.push_scope()
+                for s in elif_branch["body"]["body"]:
+                    self.check_stmt(s, in_pure)
+                self.pop_scope()
+            if stmt.get("else"):
+                self.push_scope()
+                for s in stmt["else"]["body"]:
+                    self.check_stmt(s, in_pure)
+                self.pop_scope()
+            return None
+
+        if t == "While":
+            self.check_expr(stmt["cond"], in_pure, in_op)
+            self.push_scope()
+            for s in stmt["body"]["body"]:
+                self.check_stmt(s, in_pure)
+            self.pop_scope()
+            return None
+
+        if t == "ForEach":
+            iter_type = self.check_expr(stmt["iterable"], in_pure, in_op)
+            self.push_scope()
+            # 元素类型：表 -> 任意；文本 -> 文本
+            elem_type = "string" if iter_type == "string" else None
+            self.declare_var(stmt["var"], elem_type, True)
+            if stmt.get("var2"):
+                # 键值对遍历：键是任意类型
+                self.declare_var(stmt["var2"], None, True)
+            for s in stmt["body"]["body"]:
+                self.check_stmt(s, in_pure)
+            self.pop_scope()
+            return None
+
+        if t == "Return":
+            if stmt.get("value") is not None:
+                self.check_expr(stmt["value"], in_pure, in_op)
+            return None
+
+        if t == "Throw":
+            if in_pure:
+                raise CheckError("纯功能里不能抛错（副作用）", line)
+            self.check_expr(stmt["value"], in_pure, in_op)
+            return None
+
+        if t == "TryExpr":
+            # 顶层独立捕获 = 结果丢弃，强制兜底失效（除非是表达式赋值场景）
+            raise CheckError(
+                '捕获() 的结果不能丢弃——必须用 量/可变 接住并检查 .成功 处理两种分支，'
+                '否则"强制兜底"失效。例：量 r = 捕获(...); 若 r.成功 {...} 否则 {...}',
+                line)
+            return None
+
+        if t == "TryBlock":
+            self.push_scope()
+            self.in_try_depth += 1
+            for s in stmt["body"]["body"]:
+                self.check_stmt(s, in_pure)
+            self.in_try_depth -= 1
+            self.pop_scope()
+            return None
+
+        if t == "Import":
+            return None
+
+        if t == "Print":
+            if in_pure:
+                raise CheckError("纯功能里不能打印（副作用）", line)
+            for a in stmt["args"]:
+                self.check_expr(a, in_pure, in_op)
+            return None
+
+        if t == "Assert":
+            self.check_expr(stmt["cond"], in_pure, in_op)
+            if stmt.get("msg"):
+                self.check_expr(stmt["msg"], in_pure, in_op)
+            return None
+
+        if t == "ExprStmt":
+            # 捕获结果丢弃检查：捕获(...) 作为独立语句 = 结果没人看，强制兜底失效
+            if stmt["expr"]["type"] == "TryExpr":
+                raise CheckError(
+                    '捕获() 的结果不能丢弃——必须检查 .成功 并处理两种分支，'
+                    '否则"强制兜底"失效。例：量 r = 捕获(...); 若 r.成功 {...} 否则 {...}',
+                    line)
+            self.check_expr(stmt["expr"], in_pure)
+            return None
+
+        if t == "Block":
+            self.push_scope()
+            for s in stmt["body"]:
+                self.check_stmt(s, in_pure)
+            self.pop_scope()
+            return None
+
+        raise CheckError(f"未知语句类型: {t}", line)
+
+    # ------------------------------------------------------------------
+    # 表达式
+    # ------------------------------------------------------------------
+    def check_expr(self, expr, in_pure=False, in_op=False):
+        t = expr["type"]
+        line = expr.get("line")
+
+        if t == "Literal":
+            kind = expr.get("kind", "number")
+            return {"number": "number", "string": "string", "bool": "bool",
+                    "nil": "nil"}.get(kind, "任意")
+
+        if t == "Template":
+            # 模板字符串里的 \${} 插值——这里简单处理为文本
+            return "string"
+
+        if t == "Var":
+            var = self.lookup_var(expr["name"])
+            if not var:
+                # 允许内置函数名作为值（当参数传）
+                if expr["name"] in BUILTINS:
+                    return "function"
+                raise CheckError(f"变量 '{expr['name']}' 未声明", line)
+            return var["type"]
+
+        if t == "Self":
+            return "任意"
+
+        if t == "Meta":
+            # @运算符 -> 函数
+            return "function"
+
+        if t == "BinOp":
+            lt = self.check_expr(expr["left"], in_pure)
+            rt = self.check_expr(expr["right"], in_pure)
+            op = expr["op"]
+            # 无隐式转换：+ 只能 数字+数字 或 文本+文本
+            if op in ("+", "-", "*", "/", "%"):
+                if lt == "string" and rt == "string" and op == "+":
+                    return "string"
+                if lt in ("number", None) and rt in ("number", None):
+                    return "number"
+                # 两侧都是"任意"（如表元素/函数返回值）→ 放行，运行时验证
+                if lt in ("任意", None) and rt in ("任意", None):
+                    return "任意"
+                # 一侧"任意"/未知 一侧具体类型 → 放行（表元素可能是任意类型，运行时验证）
+                if lt in ("任意", None) or rt in ("任意", None):
+                    return "任意"
+                raise CheckError(
+                    f"运算符 {op} 需要两侧同类型（数字+数字 或 文本+文本），"
+                    f"实际是 {self.type_name(lt)} {op} {self.type_name(rt)}。"
+                    f"提示：用 转数字() 或 转文本() 显式转换", line)
+            if op in ("==", "!=", "<", "<=", ">", ">="):
+                if lt is not None and rt is not None and lt != rt and op in ("<", "<=", ">", ">=") \\
+                        and lt not in ("任意",) and rt not in ("任意",):
+                    raise CheckError(
+                        f"比较运算符 {op} 需要两侧同类型，"
+                        f"实际是 {self.type_name(lt)} {op} {self.type_name(rt)}", line)
+                return "bool"
+            return "任意"
+
+        if t == "LogicOp":
+            self.check_expr(expr["left"], in_pure)
+            self.check_expr(expr["right"], in_pure)
+            return "bool"
+
+        if t == "Pipe":
+            # 管道：x | f  ->  右侧必须是函数
+            self.check_expr(expr["left"], in_pure)
+            self.check_expr(expr["right"], in_pure)
+            return "任意"
+
+        if t == "UnaryOp":
+            operand_type = self.check_expr(expr["operand"], in_pure)
+            if expr["op"] == "-":
+                if operand_type not in ("number", None):
+                    raise CheckError("一元负号只能用于数字", line)
+                return "number"
+            if expr["op"] == "非":
+                return "bool"
+            return "任意"
+
+        if t == "Call":
+            callee = expr["callee"]
+            # 内置函数调用
+            if callee["type"] == "Var" and callee["name"] in BUILTINS:
+                name = callee["name"]
+                sig = BUILTINS[name]
+                if in_pure and name == "打印":
+                    raise CheckError("纯功能里不能调用 打印（副作用）", line)
+                for a in expr["args"]:
+                    self.check_expr(a, in_pure)
+                for k, v in expr.get("kwargs", {}).items():
+                    self.check_expr(v, in_pure)
+                return sig[1]
+            # 用户函数
+            if callee["type"] == "Var" and callee["name"] in self.functions:
+                fn = self.functions[callee["name"]]
+                if in_pure and not fn["pure"]:
+                    raise CheckError(
+                        f"纯功能里不能调用非纯功能 '{callee['name']}'"
+                        f"（可能产生副作用）", line)
+                # 操作函数强制兜底：普通/纯功能里调用操作函数必须包在 捕获() 里
+                # 顶层（全局作用域）放行——顶层本身就是"操作环境"
+                if fn.get("op") and not in_op and self.in_try_depth == 0 \\
+                        and len(self.scope_stack) > 1:
+                    raise CheckError(
+                        f"操作函数 '{callee['name']}' 可能失败（副作用），"
+                        f"调用必须用 捕获() 包住，或把当前函数也声明为 操作", line)
+                # 参数数量：至少要有必填参数的数量
+                required = sum(1 for p in fn["params"] if p.get("default") is None)
+                if len(expr["args"]) > len(fn["params"]):
+                    raise CheckError(
+                        f"函数 '{callee['name']}' 最多接受 {len(fn['params'])} 个参数，"
+                        f"实际传了 {len(expr['args'])} 个", line)
+                if len(expr["args"]) < required:
+                    raise CheckError(
+                        f"函数 '{callee['name']}' 至少需要 {required} 个参数，"
+                        f"实际传了 {len(expr['args'])} 个", line)
+                for a in expr["args"]:
+                    self.check_expr(a, in_pure)
+                for k, v in expr.get("kwargs", {}).items():
+                    self.check_expr(v, in_pure)
+                return fn["ret"]
+            # 方法调用/匿名函数调用
+            self.check_expr(callee, in_pure)
+            for a in expr["args"]:
+                self.check_expr(a, in_pure)
+            return "任意"
+
+        if t == "GetAttr":
+            self.check_expr(expr["obj"], in_pure)
+            return "任意"
+
+        if t == "Index":
+            self.check_expr(expr["obj"], in_pure)
+            idx_type = self.check_expr(expr["index"], in_pure)
+            if idx_type not in ("number", "string", None):
+                raise CheckError("下标必须是数字或文本", line)
+            return "任意"
+
+        if t == "Slice":
+            self.check_expr(expr["obj"], in_pure)
+            if expr.get("start") is not None:
+                self.check_expr(expr["start"], in_pure)
+            if expr.get("end") is not None:
+                self.check_expr(expr["end"], in_pure)
+            return "任意"
+
+        if t == "Table":
+            for entry in expr["entries"]:
+                self.check_expr(entry["value"], in_pure)
+            return "table"
+
+        if t == "TryExpr":
+            # 捕获(expr) -> 返回结果表
+            self.in_try_depth += 1
+            self.check_expr(expr["expr"], in_pure, in_op)
+            self.in_try_depth -= 1
+            return "table"
+
+        if t == "ImportExpr":
+            # 导入(路径) -> 返回导出表
+            return "table"
+
+        if t in ("FnLiteral", "PureFnLiteral", "OpFnLiteral"):
+            # 匿名函数
+            self.push_scope()
+            for p in expr["params"]:
+                self.declare_var(p["name"], p.get("type"), True)
+            pure = (t == "PureFnLiteral")
+            for s in expr["body"]["body"]:
+                self.check_stmt(s, in_pure=pure)
+            self.pop_scope()
+            return "function"
+
+        if t == "Assign":
+            # 表达式位置的赋值（少见）
+            self.check_expr(expr["target"], in_pure)
+            self.check_expr(expr["value"], in_pure)
+            return None
+
+        raise CheckError(f"未知表达式类型: {t}", line)
+
+
+def check(ast) -> bool:
+    """AST -> 类型检查，通过返回 True，失败抛 CheckError"""
+    TypeChecker().check(ast)
+    return True
+` },
+    { name: 'interpreter', src: `# -*- coding: utf-8 -*-
+"""
+无错语言 解释器 (interpreter.py)
+=================================
+树遍历解释器：AST -> 执行结果。
+
+设计：
+  - 环境链（作用域嵌套）
+  - 值类型：int / Dec / Fraction（数字塔）、str、bool、None（空）、list/dict（表）、function
+  - 表：Python dict（键值对），数组用自动数字键
+  - 错误：WucuoError（抛错）通过捕获 处理
+"""
+
+from number import (parse_number, num_add, num_sub, num_mul, num_div,
+                    num_mod, num_neg, num_eq, num_lt, num_le, num_gt, num_ge,
+                    num_str, num_is_zero, Num)
+
+from typing import Any, Dict, List, Optional
+
+
+class WucuoError(Exception):
+    """语言级错误（抛错/运行时错误），可被 捕获 处理"""
+    def __init__(self, value, trace=None):
+        self.value = value  # 错误值（任意）
+        self.trace = trace or []
+        super().__init__(f"运行时错误: {value}")
+
+
+class ReturnSignal(Exception):
+    """函数返回信号"""
+    def __init__(self, value):
+        self.value = value
+
+
+class BreakSignal(Exception):
+    """跳出循环信号（未来支持）"""
+    pass
+
+
+class Environment:
+    def __init__(self, parent: Optional["Environment"] = None):
+        self.vars: Dict[str, Any] = {}
+        self.parent = parent
+
+    def define(self, name, value):
+        self.vars[name] = value
+
+    def assign(self, name, value):
+        if name in self.vars:
+            self.vars[name] = value
+            return
+        if self.parent:
+            self.parent.assign(name, value)
+        else:
+            raise WucuoError(f"变量 '{name}' 未声明")
+
+    def get(self, name):
+        env = self
+        while env:
+            if name in env.vars:
+                return env.vars[name]
+            env = env.parent
+        raise WucuoError(f"变量 '{name}' 未声明")
+
+
+class Function:
+    """用户定义的函数"""
+    def __init__(self, name, params, body, closure, pure=False, interp=None):
+        self.name = name
+        self.params = params
+        self.body = body
+        self.closure = closure
+        self.pure = pure
+        self.interp = interp
+
+    def __repr__(self):
+        return f"<功能 {self.name}>"
+
+    def __call__(self, *args):
+        """让 Function 对象可直接调用（编译模式与模块互操作需要）"""
+        return self.interp.call_value(self, list(args), self.closure)
+
+
+# ============ 协程支持（加强版新增） ============
+import threading
+
+# 当前线程 -> 协程映射（让出() 用它找自己所在的协程）
+CURRENT_COROUTINE = {}
+
+
+class Coroutine:
+    """协程：用独立线程 + 条件变量实现协作式调度。
+    让出() 暂停当前线程等待恢复；恢复() 唤醒它。调用栈完整保留。
+
+    状态机：
+      suspended - 未启动 或 让出后暂停
+      running   - 执行中
+      dead      - 结束（有 result 或 error）
+    同步标志：
+      yield_ready - 协程刚让出，有值可取（主线程用它判断"有结果"）
+      resumed     - 主线程已恢复协程（协程线程用它判断"被唤醒"）
+    """
+
+    def __init__(self, fn, args, closure_env, interp):
+        self.fn = fn
+        self.args = args
+        self.interp = interp
+        self.cond = threading.Condition()
+        self.state = "suspended"
+        self.started = False
+        self.yield_ready = False
+        self.resumed = False
+        self.yield_value = None
+        self.resume_value = None
+        self.result = None
+        self.error = None
+        self.thread = threading.Thread(target=self._run, daemon=True)
+
+    def _run(self):
+        CURRENT_COROUTINE[threading.get_ident()] = self
+        with self.cond:
+            self.state = "running"
+        try:
+            fn_env = Environment(self.fn.closure)
+            if len(self.args) > len(self.fn.params):
+                raise WucuoError(
+                    f"函数 {self.fn.name or '匿名'} 最多接受 {len(self.fn.params)} 个参数")
+            for i, p in enumerate(self.fn.params):
+                if i < len(self.args):
+                    fn_env.define(p["name"], self.args[i])
+                elif p.get("default") is not None:
+                    fn_env.define(p["name"], self.interp.eval_expr(p["default"], self.fn.closure))
+                else:
+                    raise WucuoError(f"函数 {self.fn.name or '匿名'} 缺少参数 '{p['name']}'")
+            try:
+                self.result = self.interp.exec_block(self.fn.body, fn_env)
+            except ReturnSignal as r:
+                self.result = r.value
+        except WucuoError as e:
+            self.error = e
+        except Exception as e:
+            self.error = WucuoError(f"协程内部错误: {e}")
+        finally:
+            with self.cond:
+                self.state = "dead"
+                self.cond.notify()
+            CURRENT_COROUTINE.pop(threading.get_ident(), None)
+
+    def start(self):
+        self.thread.start()
+
+
+class Interpreter:
+    def __init__(self, builtins: Dict[str, Any], import_loader=None):
+        self.globals = Environment()
+        self.builtins = builtins
+        self.import_loader = import_loader or (lambda path: {})
+        self.exports = {}  # 顶层导出表（模块系统用）
+
+        # 注册内置函数到全局
+        for name, fn in builtins.items():
+            self.globals.define(name, fn)
+
+    # ------------------------------------------------------------------
+    # 执行入口
+    # ------------------------------------------------------------------
+    def interpret(self, ast, collect_exports=False) -> Any:
+        """执行程序。collect_exports=True 时收集顶层声明作为导出表（模块用）"""
+        result = None
+        for stmt in ast["body"]:
+            result = self.exec_stmt(stmt, self.globals)
+            # 模块导出：顶层声明（量/可变/功能/纯功能）自动进导出表
+            if collect_exports and stmt["type"] in ("Let", "Mut", "FnDef", "PureFnDef"):
+                try:
+                    self.exports[stmt["name"]] = self.globals.get(stmt["name"])
+                except Exception:
+                    pass
+        return result
+
+    # ------------------------------------------------------------------
+    # 语句
+    # ------------------------------------------------------------------
+    def exec_stmt(self, stmt, env: Environment) -> Any:
+        t = stmt["type"]
+
+        if t in ("Let", "Mut"):
+            value = self.eval_expr(stmt["value"], env)
+            names = stmt.get("names") or [stmt["name"]]
+            if len(names) == 1:
+                env.define(stmt["name"], value)
+            else:
+                # 解构赋值：值必须是表，按数字键顺序解包
+                if not isinstance(value, dict):
+                    raise WucuoError("解构赋值要求右侧是表", stmt.get("line"))
+                items = list(value.values())
+                if len(items) < len(names):
+                    raise WucuoError(
+                        f"解构失败：右侧表有 {len(items)} 个元素，需要 {len(names)} 个变量",
+                        stmt.get("line"))
+                for i, nm in enumerate(names):
+                    env.define(nm, items[i])
+            return value
+
+        if t == "Assign":
+            target = stmt["target"]
+            value = self.eval_expr(stmt["value"], env)
+            if target["type"] == "Var":
+                env.assign(target["name"], value)
+            elif target["type"] == "GetAttr":
+                obj = self.eval_expr(target["obj"], env)
+                self.set_attr(obj, target["name"], value, stmt.get("line"))
+            elif target["type"] == "Index":
+                obj = self.eval_expr(target["obj"], env)
+                idx = self.eval_expr(target["index"], env)
+                self.set_index(obj, idx, value, stmt.get("line"))
+            else:
+                raise WucuoError("无效的赋值目标", stmt.get("line"))
+            return value
+
+        if t == "FnDef":
+            fn = Function(stmt["name"], stmt["params"], stmt["body"], env, pure=False, interp=self)
+            env.define(stmt["name"], fn)
+            return fn
+
+        if t == "OpFnDef":
+            fn = Function(stmt["name"], stmt["params"], stmt["body"], env, pure=False, interp=self)
+            env.define(stmt["name"], fn)
+            return fn
+
+        if t == "PureFnDef":
+            fn = Function(stmt["name"], stmt["params"], stmt["body"], env, pure=True, interp=self)
+            env.define(stmt["name"], fn)
+            return fn
+
+        if t == "If":
+            cond = self.is_truthy(self.eval_expr(stmt["cond"], env))
+            if cond:
+                return self.exec_block(stmt["then"], env)
+            for elif_branch in stmt.get("elifs", []):
+                if self.is_truthy(self.eval_expr(elif_branch["cond"], env)):
+                    return self.exec_block(elif_branch["body"], env)
+            if stmt.get("else"):
+                return self.exec_block(stmt["else"], env)
+            return None
+
+        if t == "While":
+            # 循环保护：防止 AI 写出无限循环（防错设计）
+            max_iter = 1_000_000
+            count = 0
+            while self.is_truthy(self.eval_expr(stmt["cond"], env)):
+                count += 1
+                if count > max_iter:
+                    raise WucuoError("循环超过 100 万次，可能死循环（已在第"
+                                     f"{stmt.get('line','?')}行拦截）")
+                self.exec_block(stmt["body"], env)
+            return None
+
+        if t == "ForEach":
+            iterable = self.eval_expr(stmt["iterable"], env)
+            var2 = stmt.get("var2")
+            if var2:
+                # 键值对遍历：对 键, 值 在 表
+                if not isinstance(iterable, dict):
+                    raise WucuoError("键值对遍历要求右侧是表", stmt.get("line"))
+                items = list(iterable.items())
+            elif isinstance(iterable, dict):
+                # 遍历表：给值（数组表的值就是元素）
+                items = [(None, v) for v in iterable.values()]
+            elif isinstance(iterable, str):
+                items = [(None, ch) for ch in iterable]
+            elif isinstance(iterable, list):
+                items = [(None, x) for x in iterable]
+            else:
+                raise WucuoError("对 ... 在 只能遍历 表 或 文本", stmt.get("line"))
+            max_iter = 1_000_000
+            count = 0
+            for k, v in items:
+                count += 1
+                if count > max_iter:
+                    raise WucuoError("遍历超过 100 万次，可能死循环")
+                child = Environment(env)
+                if var2:
+                    child.define(stmt["var"], k)
+                    child.define(var2, v)
+                else:
+                    child.define(stmt["var"], v)
+                self.exec_block(stmt["body"], child)
+            return None
+
+        if t == "Return":
+            value = self.eval_expr(stmt["value"], env) if stmt.get("value") else None
+            raise ReturnSignal(value)
+
+        if t == "Throw":
+            value = self.eval_expr(stmt["value"], env)
+            raise WucuoError(value, [stmt.get("line")])
+
+        if t == "TryExpr":
+            try:
+                return {"成功": True, "值": self.eval_expr(stmt["expr"], env)}
+            except WucuoError as e:
+                return {"成功": False, "值": None, "错误": e.value}
+            except Exception as e:
+                return {"成功": False, "值": None, "错误": str(e)}
+
+        if t == "TryBlock":
+            try:
+                self.exec_block(stmt["body"], env)
+                return {"成功": True, "值": None}
+            except WucuoError as e:
+                return {"成功": False, "值": None, "错误": e.value}
+            except Exception as e:
+                return {"成功": False, "值": None, "错误": str(e)}
+
+        if t == "Import":
+            path = stmt["path"]
+            mod = self.import_loader(path)
+            return mod
+
+        if t == "Print":
+            parts = []
+            for a in stmt["args"]:
+                parts.append(self.format_value(self.eval_expr(a, env)))
+            print(" ".join(parts))
+            return None
+
+        if t == "Assert":
+            cond = self.eval_expr(stmt["cond"], env)
+            if not self.is_truthy(cond):
+                msg = self.eval_expr(stmt["msg"], env) if stmt.get("msg") else "断言失败"
+                raise WucuoError(msg, stmt.get("line"))
+            return None
+
+        if t == "ExprStmt":
+            return self.eval_expr(stmt["expr"], env)
+
+        if t == "Block":
+            return self.exec_block(stmt, env)
+
+        raise WucuoError(f"未知语句: {t}")
+
+    def exec_block(self, block, env: Environment) -> Any:
+        """块：创建子作用域执行"""
+        child = Environment(env)
+        result = None
+        for stmt in block["body"]:
+            result = self.exec_stmt(stmt, child)
+        return result
+
+    # ------------------------------------------------------------------
+    # 表达式
+    # ------------------------------------------------------------------
+    def eval_expr(self, expr, env: Environment) -> Any:
+        t = expr["type"]
+
+        if t == "Literal":
+            kind = expr.get("kind", "number")
+            if kind == "number":
+                return parse_number(expr["value"])
+            if kind == "string":
+                return expr["value"]
+            return expr["value"]  # bool/nil
+
+        if t == "Template":
+            # 模板字符串：\${expr} 插值（支持函数调用/属性链/算术）
+            import re
+            text = expr["value"]
+            def repl(m):
+                inner = m.group(1)
+                return self.format_value(self.eval_template_expr(inner, env))
+            result = re.sub(r"\\$\\{([^}]+)\\}", repl, text)
+            return result
+
+        if t == "Var":
+            # 先查局部，再查内置
+            try:
+                return env.get(expr["name"])
+            except WucuoError:
+                if expr["name"] in self.builtins:
+                    return self.builtins[expr["name"]]
+                raise
+
+        if t == "Self":
+            # 自身：从环境链找（方法调用时绑定）
+            try:
+                return env.get("自身")
+            except WucuoError:
+                raise WucuoError("自身 只能在方法里使用（表.方法() 调用时）")
+
+        if t == "Meta":
+            # 元编程 @运算符：查找运算符实现函数
+            name = expr["name"]
+            if name in self.builtins:
+                return self.builtins[name]
+            raise WucuoError(f"未知运算符实现: {name}")
+
+        if t == "BinOp":
+            left = self.eval_expr(expr["left"], env)
+            right = self.eval_expr(expr["right"], env)
+            op = expr["op"]
+            # 字符串 + 拼接
+            if op == "+" and isinstance(left, str) and isinstance(right, str):
+                return left + right
+            # 数字运算（数字塔）
+            if op == "+":
+                return num_add(left, right)
+            if op == "-":
+                return num_sub(left, right)
+            if op == "*":
+                return num_mul(left, right)
+            if op == "/":
+                return num_div(left, right)
+            if op == "%":
+                return num_mod(left, right)
+            if op == "==":
+                return self.value_eq(left, right)
+            if op == "!=":
+                return not self.value_eq(left, right)
+            if op == "<":
+                return num_lt(left, right)
+            if op == "<=":
+                return num_le(left, right)
+            if op == ">":
+                return num_gt(left, right)
+            if op == ">=":
+                return num_ge(left, right)
+            raise WucuoError(f"未知运算符: {op}")
+
+        if t == "LogicOp":
+            left = self.eval_expr(expr["left"], env)
+            if expr["op"] == "和":
+                return left if not self.is_truthy(left) else self.eval_expr(expr["right"], env)
+            else:  # 或
+                return left if self.is_truthy(left) else self.eval_expr(expr["right"], env)
+
+        if t == "Pipe":
+            # 管道：左侧值 | 右侧函数  ->  调用右侧函数，参数是左侧值
+            left_val = self.eval_expr(expr["left"], env)
+            right_val = self.eval_expr(expr["right"], env)
+            if not callable(right_val) and not isinstance(right_val, Function):
+                raise WucuoError("管道右侧必须是函数", expr.get("line"))
+            return self.call_value(right_val, [left_val], env, expr.get("line"))
+
+        if t == "UnaryOp":
+            operand = self.eval_expr(expr["operand"], env)
+            if expr["op"] == "-":
+                return num_neg(operand)
+            if expr["op"] == "非":
+                return not self.is_truthy(operand)
+            raise WucuoError(f"未知一元运算符: {expr['op']}")
+
+        if t == "Call":
+            # 方法调用：表.方法(...) 时把表作为 自身(this) 传入
+            this_val = None
+            if expr["callee"]["type"] == "GetAttr":
+                this_val = self.eval_expr(expr["callee"]["obj"], env)
+            callee = self.eval_expr(expr["callee"], env)
+            args = [self.eval_expr(a, env) for a in expr["args"]]
+            kwargs = {k: self.eval_expr(v, env) for k, v in expr.get("kwargs", {}).items()}
+            if not callable(callee) and not isinstance(callee, Function):
+                raise WucuoError(f"无法调用非函数值: {self.format_value(callee)}")
+            return self.call_value(callee, args, env, expr.get("line"), this_val, kwargs)
+
+        if t == "GetAttr":
+            obj = self.eval_expr(expr["obj"], env)
+            if isinstance(obj, dict):
+                if expr["name"] not in obj:
+                    raise WucuoError(f"表里没有键 '{expr['name']}'", expr.get("line"))
+                return obj[expr["name"]]
+            # FFI：Python 模块/对象的属性访问
+            try:
+                return getattr(obj, expr["name"])
+            except AttributeError:
+                raise WucuoError(f"对象没有属性 '{expr['name']}'", expr.get("line"))
+
+        if t == "Index":
+            obj = self.eval_expr(expr["obj"], env)
+            idx = self.eval_expr(expr["index"], env)
+            if isinstance(obj, dict):
+                if idx not in obj:
+                    raise WucuoError(f"表里没有键 {self.format_value(idx)}", expr.get("line"))
+                return obj[idx]
+            if isinstance(obj, str):
+                if not isinstance(idx, int):
+                    raise WucuoError("文本下标必须是整数", expr.get("line"))
+                return obj[idx]
+            raise WucuoError("下标访问只支持表或文本", expr.get("line"))
+
+        if t == "Slice":
+            # 切片 [开始:结束]
+            obj = self.eval_expr(expr["obj"], env)
+            start = self.eval_expr(expr["start"], env) if expr.get("start") is not None else None
+            end = self.eval_expr(expr["end"], env) if expr.get("end") is not None else None
+            if isinstance(obj, str):
+                s = start if isinstance(start, int) else None
+                e = end if isinstance(end, int) else None
+                return obj[s:e]
+            if isinstance(obj, dict):
+                # 表切片：按数字键
+                items = list(obj.values())
+                s = start if isinstance(start, int) else None
+                e = end if isinstance(end, int) else None
+                sliced = items[s:e]
+                return {i: sliced[i] for i in range(len(sliced))}
+            raise WucuoError("切片只支持文本或表", expr.get("line"))
+
+        if t == "Table":
+            table = {}
+            next_index = 0
+            for entry in expr["entries"]:
+                if entry["kind"] == "pair":
+                    table[entry["key"]] = self.eval_expr(entry["value"], env)
+                else:
+                    # 数组元素：自动数字键
+                    table[next_index] = self.eval_expr(entry["value"], env)
+                    next_index += 1
+            return table
+
+        if t in ("FnLiteral", "PureFnLiteral", "OpFnLiteral"):
+            return Function(None, expr["params"], expr["body"], env,
+                            pure=(t == "PureFnLiteral"), interp=self)
+
+        if t == "TryExpr":
+            # 捕获(expr)：求值并捕获错误，返回结果表
+            try:
+                value = self.eval_expr(expr["expr"], env)
+                return {"成功": True, "值": value}
+            except WucuoError as e:
+                return {"成功": False, "值": None, "错误": e.value}
+            except Exception as e:
+                return {"成功": False, "值": None, "错误": str(e)}
+
+        if t == "ImportExpr":
+            # 导入(路径)：加载模块，返回导出表
+            return self.import_loader(expr["path"])
+
+        raise WucuoError(f"未知表达式: {t}")
+
+    def eval_template_expr(self, expr_text: str, env: Environment) -> Any:
+        """模板插值表达式求值：复用 parser + interpreter 的完整表达式能力"""
+        from parser import Parser, tokenize
+        try:
+            # 把插值内容当作表达式解析（包装成表达式语句）
+            tokens = tokenize(expr_text)
+            parser = Parser(tokens)
+            expr = parser.parse_expr()
+            return self.eval_expr(expr, env)
+        except Exception:
+            # 兜底：简单变量/属性链
+            parts = expr_text.strip().split(".")
+            value = env.get(parts[0])
+            for p in parts[1:]:
+                if isinstance(value, dict):
+                    value = value[p]
+                else:
+                    raise WucuoError(f"无法访问 {p}")
+            return value
+
+    def eval_simple(self, expr_text: str, env: Environment) -> Any:
+        """模板字符串里的简单表达式求值（变量/属性链）"""
+        parts = expr_text.strip().split(".")
+        value = env.get(parts[0])
+        for p in parts[1:]:
+            if isinstance(value, dict):
+                value = value[p]
+            else:
+                raise WucuoError(f"无法访问 {p}")
+        return value
+
+    # ------------------------------------------------------------------
+    # 辅助
+    # ------------------------------------------------------------------
+    def call_value(self, callee, args, env, line=None, this_val=None, kwargs=None):
+        """调用函数值（内置或用户函数）。this_val 是方法调用时的 自身 绑定"""
+        kwargs = kwargs or {}
+        # 内置函数（Python callable）
+        if callable(callee) and not isinstance(callee, Function):
+            try:
+                return callee(*args, **kwargs)
+            except WucuoError:
+                raise
+            except Exception as e:
+                raise WucuoError(f"内置函数出错: {e}", line)
+        # 用户函数
+        if isinstance(callee, Function):
+            fn_env = Environment(callee.closure)
+            if this_val is not None:
+                fn_env.define("自身", this_val)
+            if len(args) > len(callee.params):
+                raise WucuoError(
+                    f"函数 {callee.name or '匿名'} 最多接受 {len(callee.params)} 个参数，"
+                    f"实际传了 {len(args)} 个", line)
+            for i, p in enumerate(callee.params):
+                if i < len(args):
+                    fn_env.define(p["name"], args[i])
+                elif p.get("default") is not None:
+                    # 用默认参数（在函数闭包环境求值）
+                    fn_env.define(p["name"], self.eval_expr(p["default"], callee.closure))
+                else:
+                    raise WucuoError(
+                        f"函数 {callee.name or '匿名'} 缺少参数 '{p['name']}'", line)
+            try:
+                self.exec_block(callee.body, fn_env)
+                return None
+            except ReturnSignal as r:
+                return r.value
+        raise WucuoError(f"无法调用: {callee}", line)
+
+    def is_truthy(self, value) -> bool:
+        """真值规则：只有 假/空/0/空文本/空表 是假"""
+        if value is None:
+            return False
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, Num)):
+            return not num_is_zero(value)
+        if isinstance(value, str):
+            return len(value) > 0
+        if isinstance(value, dict):
+            return len(value) > 0
+        return True
+
+    def value_eq(self, a, b) -> bool:
+        if isinstance(a, Num) and isinstance(b, Num):
+            return num_eq(a, b)
+        if isinstance(a, dict) and isinstance(b, dict):
+            return a is b  # 表比较身份
+        return a == b
+
+    def format_value(self, value) -> str:
+        """值 -> 文本（打印用）"""
+        if value is None:
+            return "空"
+        if isinstance(value, bool):
+            return "真" if value else "假"
+        if isinstance(value, Num):
+            return num_str(value)
+        if isinstance(value, str):
+            return value
+        if isinstance(value, dict):
+            parts = []
+            for k, v in value.items():
+                parts.append(f"{k}: {self.format_value(v)}")
+            return "{" + ", ".join(parts) + "}"
+        if isinstance(value, Function):
+            return f"<功能 {value.name or '匿名'}>"
+        return str(value)
+
+    def set_attr(self, obj, name, value, line=None):
+        if not isinstance(obj, dict):
+            raise WucuoError("只能给表设置属性", line)
+        obj[name] = value
+
+    def set_index(self, obj, idx, value, line=None):
+        if isinstance(obj, dict):
+            obj[idx] = value
+        elif isinstance(obj, list):
+            obj[idx] = value
+        else:
+            raise WucuoError("只能给表设置下标", line)
+` },
+    { name: 'wc_run', src: `# -*- coding: utf-8 -*-
+"""
+无错语言 Playground 入口（浏览器 Pyodide 版）
+=============================================
+浏览器里没有 threading / socket / 文件系统，所以：
+  - 复用 number/lexer/parser/checker（纯逻辑，无依赖）
+  - 用精简 builtins（无 threading 依赖）
+  - 协程/网络/文件/服务器 在浏览器里不可用（报错提示）
+
+用法（Pyodide 环境）：
+  import wc_run
+  result = wc_run.run("打印('你好')")
+"""
+import sys
+import io
+import os
+
+# 确保能导入上级目录的核心模块（number/lexer/parser/checker/interpreter）
+_PARENT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _PARENT not in sys.path:
+    sys.path.insert(0, _PARENT)
+
+# 浏览器环境修正：不依赖 threading 的 stdlib 精简版
+_BROWSER_BUILTINS = {}
+
+
+def make_browser_builtins():
+    """浏览器可用内置函数（无 threading/socket/文件依赖）"""
+    from number import (num_str, parse_number, num_add, num_sub, num_mul,
+                        num_div, num_mod, num_neg, num_eq, num_lt, num_le,
+                        num_gt, num_ge, Num, num_is_zero)
+    from interpreter import WucuoError
+    import random
+    import math
+
+    b = {}
+
+    def _打印(*args):
+        parts = []
+        for a in args:
+            if isinstance(a, Num):
+                parts.append(num_str(a))
+            elif a is None:
+                parts.append("空")
+            elif isinstance(a, bool):
+                parts.append("真" if a else "假")
+            elif isinstance(a, dict):
+                parts.append("{" + ", ".join(f"{k}: {v}" for k, v in a.items()) + "}")
+            else:
+                parts.append(str(a))
+        return " ".join(parts)
+
+    def _长度(x):
+        if isinstance(x, dict):
+            return len(x)
+        return len(x)
+
+    def _类型(x):
+        if isinstance(x, Num):
+            return "数字"
+        if isinstance(x, bool):
+            return "布尔"
+        if isinstance(x, str):
+            return "文本"
+        if isinstance(x, dict):
+            return "表"
+        return "空"
+
+    def _转数字(x):
+        return parse_number(str(x))
+
+    def _转文本(x):
+        if isinstance(x, Num):
+            return num_str(x)
+        return str(x)
+
+    def _转布尔(x):
+        return bool(x)
+
+    def _随机数(a, b):
+        return random.uniform(a, b)
+
+    def _随机整数(a, b):
+        return random.randint(int(a), int(b))
+
+    def _绝对值(x):
+        return abs(x)
+
+    def _平方根(x):
+        return math.sqrt(x)
+
+    def _最大值(*args):
+        return max(args)
+
+    def _最小值(*args):
+        return min(args)
+
+    def _现在():
+        import time as t
+        return int(t.time())
+
+    b["打印"] = _打印
+    b["长度"] = _长度
+    b["类型"] = _类型
+    b["转数字"] = _转数字
+    b["转文本"] = _转文本
+    b["转布尔"] = _转布尔
+    b["随机数"] = _随机数
+    b["随机整数"] = _随机整数
+    b["绝对值"] = _绝对值
+    b["平方根"] = _平方根
+    b["最大值"] = _最大值
+    b["最小值"] = _最小值
+    b["现在"] = _现在
+    return b
+
+
+def run(source: str, timeout_ms: int = 5000) -> dict:
+    """执行 wc 代码，返回 {输出, 错误} 或抛异常"""
+    from lexer import tokenize
+    from parser import parse
+    from checker import TypeChecker
+    from interpreter import Interpreter
+
+    ast = parse(source)
+    TypeChecker().check(ast)
+
+    builtins = make_browser_builtins()
+    interp = Interpreter(builtins)
+    interp.builtins = builtins
+    for name, fn in builtins.items():
+        interp.globals.define(name, fn)
+
+    # 重定向 stdout 捕获 打印 输出
+    buf = io.StringIO()
+    old_stdout = sys.stdout
+    sys.stdout = buf
+    try:
+        interp.interpret(ast)
+    finally:
+        sys.stdout = old_stdout
+    return {"输出": buf.getvalue(), "错误": None}
+
+
+if __name__ == "__main__":
+    # 本地测试
+    r = run('打印("你好，世界！")\\n量 x = 3\\n打印(x * x)')
+    print("输出:", repr(r["输出"]))
+    assert "你好，世界！" in r["输出"]
+    assert "9" in r["输出"]
+    print("✅ Playground 核心可用")
+` }
+];
+
+// 浏览器环境 shim（无 threading）
+const WUCUO_SHIM = `# 浏览器环境 shim：Pyodide 无 threading，提供假模块让 import 不崩
+import sys, types
+if 'threading' not in sys.modules:
+    _fake = types.ModuleType('threading')
+    _fake.get_ident = lambda: 1
+    _fake.Lock = lambda: None
+    _fake.Condition = type('Condition', (), {'__init__': lambda self, *a, **k: None,
+        'acquire': lambda self, *a, **k: True, 'release': lambda self, *a, **k: None,
+        '__enter__': lambda self, *a, **k: self, '__exit__': lambda self, *a, **k: None,
+        'wait': lambda self, *a, **k: None, 'notify': lambda self, *a, **k: None})
+    _fake.Event = type('Event', (), {'__init__': lambda self, *a, **k: None,
+        'set': lambda self, *a, **k: None, 'wait': lambda self, *a, **k: True,
+        'is_set': lambda self, *a, **k: True, 'clear': lambda self, *a, **k: None})
+    sys.modules['threading'] = _fake
+`;
+
+let pyodide = null;
+
+// ============ 示例代码 ============
+const EXAMPLES = {
+  hello: `// 你好世界 + 基础语法
+打印("你好，世界！")
+
+量 名字 = "张小明"
+量 年龄 = 16
+打印("我是", 名字, "今年", 年龄, "岁")
+
+量 x = 5
+量 y = 3
+打印("5 + 3 =", x + y)
+打印("5 * 3 =", x * y)
+`,
+  pipe: `// 管道 + 精确数字
+功能 双倍(x) -> 数字 { 返回 x * 2 }
+功能 加一(x) -> 数字 { 返回 x + 1 }
+功能 平方(x) -> 数字 { 返回 x * x }
+
+打印("5 | 双倍 | 加一 | 平方 =", 5 | 双倍 | 加一 | 平方)
+
+// 精确数字（浮点不骗人）
+打印("0.1 + 0.2 =", 0.1 + 0.2)
+打印("0.1 + 0.2 == 0.3 ?", 0.1 + 0.2 == 0.3)
+
+// 表
+量 用户 = { 名: "张三", 年龄: 18 }
+打印("用户:", 用户.名, 用户.年龄)
+`,
+  oop: `// 面向对象（自身 this）
+功能 新建账户(姓名, 初始余额) -> 表 {
+    返回 {
+        姓名: 姓名,
+        余额: 初始余额,
+        存款: 功能(金额) {
+            自身.余额 = 自身.余额 + 金额
+            返回 自身.余额
+        },
+        查询: 功能() -> 文本 {
+            返回 自身.姓名 + "的余额: " + 转文本(自身.余额)
+        }
+    }
+}
+
+量 账户 = 新建账户("张小明", 100)
+打印(账户.查询())
+打印("存 50 →", 账户.存款(50))
+打印(账户.查询())
+`,
+  error: `// 错误捕获（操作函数必须捕获）
+操作 查库存(商品) -> 数字 {
+    若 商品 == "断货" {
+        抛错("库存服务暂时不可用")
+    }
+    返回 42
+}
+
+量 结果 = 捕获(查库存("断货"))
+若 结果.成功 {
+    打印("库存:", 结果.值)
+} 否则 {
+    打印("降级兜底:", 结果.错误)
+}
+
+量 正常 = 捕获(查库存("手机"))
+若 正常.成功 {
+    打印("库存:", 正常.值)
+}
+`,
+  fib: `// 斐波那契（递归）
+纯功能 斐波那契(n) -> 数字 {
+    若 n <= 1 {
+        返回 n
+    }
+    返回 斐波那契(n - 1) + 斐波那契(n - 2)
+}
+
+对 n 在 {1, 2, 3, 4, 5, 6, 7, 8, 9, 10} {
+    打印("F(" + 转文本(n) + ") =", 斐波那契(n))
+}
+`
+};
+
+// ============ 初始化 Pyodide ============
+async function init() {
+  const status = document.getElementById('status');
+  try {
+    pyodide = await loadPyodide();
+    status.textContent = '正在加载无错语言…';
+    status.className = '';
+
+    // 加载 shim
+    await pyodide.runPythonAsync(WUCUO_SHIM);
+
+    // 加载核心模块
+    for (const mod of WUCUO_MODULES) {
+      await pyodide.runPythonAsync(mod.src);
+    }
+
+    // 验证可用
+    await pyodide.runPythonAsync('import wc_run');
+    const ok = await pyodide.runPythonAsync('wc_run.run("打印(1+1)")["输出"]');
+    if (ok.trim() !== '2') throw new Error('核心验证失败: ' + ok);
+
+    status.textContent = '✅ 就绪（浏览器本地运行）';
+    status.className = 'ready';
+    document.getElementById('runBtn').disabled = false;
+    console.log('WucuoLang Playground 就绪');
+  } catch (e) {
+    status.textContent = '❌ 加载失败';
+    status.className = 'error';
+    console.error(e);
+    document.getElementById('output').textContent = '加载失败: ' + e;
+  }
+}
+
+// ============ 运行代码 ============
+async function runCode() {
+  const output = document.getElementById('output');
+  const code = document.getElementById('code').value;
+  if (!pyodide) { output.textContent = '还没加载完，等一等…'; return; }
+
+  output.textContent = '运行中…';
+  try {
+    const result = await pyodide.runPythonAsync(`
+import wc_run
+result = wc_run.run(${JSON.stringify(code)})
+result
+`);
+    const pyobj = result.toJs ? result.toJs() : result;
+    let out = pyobj['输出'] || '';
+    out = out.replace(/\\n$/, '');
+    output.textContent = out || '(无输出)';
+  } catch (e) {
+    // 语法/类型错误显示友好信息
+    let msg = String(e.message || e);
+    // 去掉 Python traceback 前缀
+    const lines = msg.split('\\n');
+    const interesting = lines.filter(l => l.includes('错误') || l.includes('Error') || l.includes('异常')).slice(-3).join('\\n');
+    output.textContent = '❌ ' + (interesting || msg);
+  }
+}
+
+// ============ 示例加载 ============
+function loadExample() {
+  const sel = document.getElementById('exampleSelect');
+  document.getElementById('code').value = EXAMPLES[sel.value] || EXAMPLES.hello;
+}
+
+// 启动
+init();
+</script>
+</body>
+</html>

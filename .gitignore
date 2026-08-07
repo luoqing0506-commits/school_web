@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.obj
+*.o
+*.exe
+build/
+dist/
+*.spec
+ffi测试目录/
+examples/词频结果.json
+examples/分析报告.txt
+examples/项目-日志分析/分析报告.txt
+examples/测试输出.txt
+测试输出.txt

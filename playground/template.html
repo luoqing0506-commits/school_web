@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>无错语言 WucuoLang · 在线游乐场</title>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+  background: #0d1117; color: #e6edf3; height: 100vh; display: flex; flex-direction: column;
+}
+header {
+  padding: 12px 20px; background: #161b22; border-bottom: 1px solid #30363d;
+  display: flex; align-items: center; gap: 16px; flex-shrink: 0;
+}
+header h1 { font-size: 18px; color: #58a6ff; font-weight: 600; }
+header .tag { font-size: 12px; color: #8b949e; }
+header .spacer { flex: 1; }
+#status { font-size: 12px; padding: 4px 12px; border-radius: 12px; background: #21262d; color: #8b949e; }
+#status.ready { background: #1f6feb33; color: #58a6ff; }
+#status.error { background: #da3633aa; color: #fff; }
+main { flex: 1; display: flex; gap: 12px; padding: 12px 20px; min-height: 0; }
+.panel { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.panel-title { font-size: 13px; color: #8b949e; margin-bottom: 8px; padding-left: 4px; }
+#code {
+  flex: 1; resize: none; background: #0d1117; color: #e6edf3; border: 1px solid #30363d;
+  border-radius: 8px; padding: 14px; font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 14px; line-height: 1.6; outline: none;
+}
+#code:focus { border-color: #58a6ff; }
+#output {
+  flex: 1; background: #0d1117; border: 1px solid #30363d; border-radius: 8px;
+  padding: 14px; font-family: "Cascadia Code", Consolas, monospace; font-size: 14px;
+  line-height: 1.6; white-space: pre-wrap; overflow-y: auto; color: #7ee787;
+}
+.controls { display: flex; gap: 8px; margin-top: 10px; flex-shrink: 0; }
+button {
+  background: #238636; color: #fff; border: none; border-radius: 6px; padding: 8px 20px;
+  font-size: 14px; cursor: pointer; transition: background .15s;
+}
+button:hover { background: #2ea043; }
+button.secondary { background: #21262d; color: #c9d1d9; }
+button.secondary:hover { background: #30363d; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+select {
+  background: #21262d; color: #c9d1d9; border: 1px solid #30363d; border-radius: 6px;
+  padding: 8px 12px; font-size: 13px; outline: none; cursor: pointer;
+}
+.examples { font-size: 12px; color: #8b949e; margin-left: auto; display: flex; align-items: center; gap: 8px; }
+footer { padding: 8px 20px; font-size: 11px; color: #484f58; text-align: center; border-top: 1px solid #21262d; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>无错语言 WucuoLang</h1>
+  <span class="tag">把"怎么写"交给语法，把"写什么"还给人脑</span>
+  <div class="spacer"></div>
+  <span id="status">加载中…</span>
+</header>
+
+<main>
+  <div class="panel">
+    <div class="panel-title">代码 (Code)</div>
+    <textarea id="code" spellcheck="false">// 无错语言 WucuoLang —— 点击"运行"试试！
+// 全中文关键字，AI 写不错，人也看得懂
+
+功能 双倍(x) -> 数字 {
+    返回 x * 2
+}
+
+功能 加一(x) -> 数字 {
+    返回 x + 1
+}
+
+打印("5 | 双倍 | 加一 =", 5 | 双倍 | 加一)
+
+// 精确数字：0.1 + 0.2 == 0.3
+打印("0.1 + 0.2 =", 0.1 + 0.2)
+
+// 循环
+可变 总和 = 0
+可变 i = 1
+循环 i <= 100 {
+    总和 = 总和 + i
+    i = i + 1
+}
+打印("1加到100 =", 总和)
+</textarea>
+    <div class="controls">
+      <button id="runBtn" onclick="runCode()" disabled>▶ 运行</button>
+      <button class="secondary" onclick="loadExample()">示例</button>
+      <select id="exampleSelect" onchange="loadExample()">
+        <option value="hello">你好世界</option>
+        <option value="pipe">管道 + 精确数字</option>
+        <option value="oop">面向对象</option>
+        <option value="error">错误捕获</option>
+        <option value="fib">斐波那契</option>
+      </select>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-title">输出 (Output)</div>
+    <div id="output">等待运行…</div>
+  </div>
+</main>
+
+<footer>WucuoLang v0.4 · 纯浏览器运行（Pyodide）· 无后端 · 代码不上传</footer>
+
+<script>
+// ============ 内嵌的无错语言核心模块（由 build_playground.py 注入） ============
+const WUCUO_MODULES = [
+/*__MODULES__*/
+];
+
+// 浏览器环境 shim（无 threading）
+const WUCUO_SHIM = `/*__SHIM__*/`;
+
+let pyodide = null;
+
+// ============ 示例代码 ============
+const EXAMPLES = {
+  hello: `// 你好世界 + 基础语法
+打印("你好，世界！")
+
+量 名字 = "张小明"
+量 年龄 = 16
+打印("我是", 名字, "今年", 年龄, "岁")
+
+量 x = 5
+量 y = 3
+打印("5 + 3 =", x + y)
+打印("5 * 3 =", x * y)
+`,
+  pipe: `// 管道 + 精确数字
+功能 双倍(x) -> 数字 { 返回 x * 2 }
+功能 加一(x) -> 数字 { 返回 x + 1 }
+功能 平方(x) -> 数字 { 返回 x * x }
+
+打印("5 | 双倍 | 加一 | 平方 =", 5 | 双倍 | 加一 | 平方)
+
+// 精确数字（浮点不骗人）
+打印("0.1 + 0.2 =", 0.1 + 0.2)
+打印("0.1 + 0.2 == 0.3 ?", 0.1 + 0.2 == 0.3)
+
+// 表
+量 用户 = { 名: "张三", 年龄: 18 }
+打印("用户:", 用户.名, 用户.年龄)
+`,
+  oop: `// 面向对象（自身 this）
+功能 新建账户(姓名, 初始余额) -> 表 {
+    返回 {
+        姓名: 姓名,
+        余额: 初始余额,
+        存款: 功能(金额) {
+            自身.余额 = 自身.余额 + 金额
+            返回 自身.余额
+        },
+        查询: 功能() -> 文本 {
+            返回 自身.姓名 + "的余额: " + 转文本(自身.余额)
+        }
+    }
+}
+
+量 账户 = 新建账户("张小明", 100)
+打印(账户.查询())
+打印("存 50 →", 账户.存款(50))
+打印(账户.查询())
+`,
+  error: `// 错误捕获（操作函数必须捕获）
+操作 查库存(商品) -> 数字 {
+    若 商品 == "断货" {
+        抛错("库存服务暂时不可用")
+    }
+    返回 42
+}
+
+量 结果 = 捕获(查库存("断货"))
+若 结果.成功 {
+    打印("库存:", 结果.值)
+} 否则 {
+    打印("降级兜底:", 结果.错误)
+}
+
+量 正常 = 捕获(查库存("手机"))
+若 正常.成功 {
+    打印("库存:", 正常.值)
+}
+`,
+  fib: `// 斐波那契（递归）
+纯功能 斐波那契(n) -> 数字 {
+    若 n <= 1 {
+        返回 n
+    }
+    返回 斐波那契(n - 1) + 斐波那契(n - 2)
+}
+
+对 n 在 {1, 2, 3, 4, 5, 6, 7, 8, 9, 10} {
+    打印("F(" + 转文本(n) + ") =", 斐波那契(n))
+}
+`
+};
+
+// ============ 初始化 Pyodide ============
+async function init() {
+  const status = document.getElementById('status');
+  try {
+    pyodide = await loadPyodide();
+    status.textContent = '正在加载无错语言…';
+    status.className = '';
+
+    // 加载 shim
+    await pyodide.runPythonAsync(WUCUO_SHIM);
+
+    // 加载核心模块
+    for (const mod of WUCUO_MODULES) {
+      await pyodide.runPythonAsync(mod.src);
+    }
+
+    // 验证可用
+    await pyodide.runPythonAsync('import wc_run');
+    const ok = await pyodide.runPythonAsync('wc_run.run("打印(1+1)")["输出"]');
+    if (ok.trim() !== '2') throw new Error('核心验证失败: ' + ok);
+
+    status.textContent = '✅ 就绪（浏览器本地运行）';
+    status.className = 'ready';
+    document.getElementById('runBtn').disabled = false;
+    console.log('WucuoLang Playground 就绪');
+  } catch (e) {
+    status.textContent = '❌ 加载失败';
+    status.className = 'error';
+    console.error(e);
+    document.getElementById('output').textContent = '加载失败: ' + e;
+  }
+}
+
+// ============ 运行代码 ============
+async function runCode() {
+  const output = document.getElementById('output');
+  const code = document.getElementById('code').value;
+  if (!pyodide) { output.textContent = '还没加载完，等一等…'; return; }
+
+  output.textContent = '运行中…';
+  try {
+    const result = await pyodide.runPythonAsync(`
+import wc_run
+result = wc_run.run(${JSON.stringify(code)})
+result
+`);
+    const pyobj = result.toJs ? result.toJs() : result;
+    let out = pyobj['输出'] || '';
+    out = out.replace(/\\n$/, '');
+    output.textContent = out || '(无输出)';
+  } catch (e) {
+    // 语法/类型错误显示友好信息
+    let msg = String(e.message || e);
+    // 去掉 Python traceback 前缀
+    const lines = msg.split('\\n');
+    const interesting = lines.filter(l => l.includes('错误') || l.includes('Error') || l.includes('异常')).slice(-3).join('\\n');
+    output.textContent = '❌ ' + (interesting || msg);
+  }
+}
+
+// ============ 示例加载 ============
+function loadExample() {
+  const sel = document.getElementById('exampleSelect');
+  document.getElementById('code').value = EXAMPLES[sel.value] || EXAMPLES.hello;
+}
+
+// 启动
+init();
+</script>
+</body>
+</html>

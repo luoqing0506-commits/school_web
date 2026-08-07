@@ -1,0 +1,93 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "WucuoLang",
+  "scopeName": "source.wucuo",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#keywords" },
+    { "include": "#meta" },
+    { "include": "#operators" },
+    { "include": "#identifiers" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.wucuo",
+          "match": "//.*$"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.wucuo",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            { "name": "constant.character.escape.wucuo", "match": "\\\\(n|t|r|\\\\|\")" }
+          ]
+        },
+        {
+          "name": "string.quoted.template.wucuo",
+          "begin": "`",
+          "end": "`",
+          "patterns": [
+            {
+              "name": "meta.embedded.expression.wucuo",
+              "begin": "\\$\\{",
+              "end": "\\}",
+              "patterns": [{ "include": "source.wucuo" }]
+            }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.wucuo",
+          "match": "(?<!\\d)\\d+(\\.\\d+)?(?!\\d)"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.wucuo",
+          "match": "(?<![\\p{L}_])(量|可变|功能|纯功能|操作|若|否则若|否则|循环|对|在|返回|抛错|捕获|导入|自身|真|假|空|和|或|非)(?![\\p{L}_])"
+        },
+        {
+          "name": "support.function.builtin.wucuo",
+          "match": "(?<![\\p{L}_])(打印|长度|类型|转数字|转文本|转布尔|断言|读入|键|含|删|克隆|合并|排序|反转|追加|弹出|分割|替换|大写|小写|去空格|包含|读文件|写文件|追加文件|存在|JSON编码|JSON解码|HTTP获取|HTTP发布|下载文件|服务|停止服务|现在|时间文本|睡眠|日期|年月日|匹配|查找全部|替换正则|随机数|随机整数|随机选择|绝对值|向下取整|向上取整|平方根|最大值|最小值|取模|协程|恢复|让出|协程状态|导入Python)(?![\\p{L}_])"
+        }
+      ]
+    },
+    "meta": {
+      "patterns": [
+        {
+          "name": "variable.language.meta.wucuo",
+          "match": "@\\w+"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.wucuo",
+          "match": "(->|==|!=|<=|>=|\\||\\+|\\-|\\*|/|%|=|<|>|!)"
+        }
+      ]
+    },
+    "identifiers": {
+      "patterns": [
+        {
+          "name": "entity.name.function.wucuo",
+          "match": "\\b[\\p{L}_][\\p{L}_0-9]*\\s*(?=\\()"
+        }
+      ]
+    }
+  }
+}

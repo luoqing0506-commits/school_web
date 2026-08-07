@@ -1,0 +1,45 @@
+// ============================================================
+// 无错语言 FFI 示例：架桥吃掉 Python 全生态
+// 调用 Python 的 os / json / math / hashlib / datetime / random
+// ============================================================
+
+打印("=== FFI: 调用 Python 标准库 ===")
+
+// 1. os 模块
+量 os = 导入Python("os")
+打印("当前目录:", os.getcwd())
+打印("环境变量 HOME:", os.getenv("USERNAME", "未知"))
+
+// 2. json 模块
+量 json = 导入Python("json")
+量 数据 = json.loads('{"name": "wucuo", "version": "0.3"}')
+打印("json 解析:", 数据["name"], 数据["version"])
+
+// 3. math 模块
+量 math = 导入Python("math")
+打印("圆周率:", math.pi)
+打印("平方根(144):", math.sqrt(144))
+
+// 4. hashlib 模块（加密）
+量 hashlib = 导入Python("hashlib")
+量 md5 = hashlib.md5("无错语言".encode("utf-8")).hexdigest()
+打印("MD5 哈希:", md5)
+
+// 5. random 模块
+量 random = 导入Python("random")
+打印("随机数:", random.randint(1, 100))
+
+// 6. datetime 模块
+量 datetime = 导入Python("datetime")
+打印("现在时间:", datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+// 7. 用 Python 的 shutil 做文件操作
+量 shutil = 导入Python("shutil")
+量 pathlib = 导入Python("pathlib")
+量 测试目录 = pathlib.Path("ffi测试目录")
+测试目录.mkdir(exist_ok = 真)
+写文件("ffi测试目录/hello.txt", "通过 FFI 创建的文件")
+打印("文件存在:", 测试目录.exists())
+
+打印("")
+打印("✅ FFI 全部工作——无错语言现在能调用整个 Python 生态！")
